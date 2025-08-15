@@ -65,7 +65,7 @@
           "style": "diamond",
           "template": " \ue70f ",
           "trailing_diamond": "\ue0c0",
-          "type": "exit"
+          "type": "status"
         },
         {
           "background": "#2f2f2f",
@@ -89,5 +89,5 @@
     "foreground": "#100e23",
     "template": " \uf061 "
   },
-  "version": 2
+  "version": 3
 }

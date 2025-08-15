@@ -6,11 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// getCmd represents the get command
+// disableCmd represents the disable command
 var disableCmd = &cobra.Command{
 	Use:       fmt.Sprintf(toggleUse, "disable"),
 	Short:     "Disable a feature",
-	Long:      fmt.Sprintf(toggleLong, "Disable", "disable"),
+	Long:      fmt.Sprintf(toggleLong, "Disable"),
 	ValidArgs: toggleArgs,
 	Args:      NoArgsOrOneValidArg,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -22,6 +22,6 @@ var disableCmd = &cobra.Command{
 	},
 }
 
-func init() { //nolint:gochecknoinits
+func init() {
 	RootCmd.AddCommand(disableCmd)
 }

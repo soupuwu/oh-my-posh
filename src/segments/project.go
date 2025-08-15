@@ -3,21 +3,23 @@ package segments
 import (
 	"encoding/json"
 	"encoding/xml"
-	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 
-	"github.com/BurntSushi/toml"
+	toml "github.com/pelletier/go-toml/v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type ProjectItem struct {
+	Fetcher func(item ProjectItem) *ProjectData
 	Name    string
 	Files   []string
-	Fetcher func(item ProjectItem) *ProjectData
 }
 
 type ProjectData struct {
@@ -32,9 +34,10 @@ type CargoTOML struct {
 	Package ProjectData
 }
 
-// Python Poetry package
+// Python package
 type PyProjectTOML struct {
-	Tool PyProjectToolTOML
+	Project ProjectData
+	Tool    PyProjectToolTOML
 }
 
 type PyProjectToolTOML struct {
@@ -50,38 +53,14 @@ type NuSpec struct {
 }
 
 type Project struct {
-	props properties.Properties
-	env   platform.Environment
-
-	projects []*ProjectItem
-	Error    string
+	base
 
 	ProjectData
+	Error    string
+	projects []*ProjectItem
 }
 
 func (n *Project) Enabled() bool {
-	for _, item := range n.projects {
-		if n.hasProjectFile(item) {
-			data := item.Fetcher(*item)
-			if data == nil {
-				continue
-			}
-			n.ProjectData = *data
-			n.ProjectData.Type = item.Name
-			return true
-		}
-	}
-	return n.props.GetBool(properties.AlwaysEnabled, false)
-}
-
-func (n *Project) Template() string {
-	return " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Version }}\uf487 {{.Version}} {{ end }}{{ if .Name }}{{ .Name }} {{ end }}{{ if .Target }}\uf4de {{.Target}} {{ end }}{{ end }}" //nolint:lll
-}
-
-func (n *Project) Init(props properties.Properties, env platform.Environment) {
-	n.props = props
-	n.env = env
-
 	n.projects = []*ProjectItem{
 		{
 			Name:    "node",
@@ -94,14 +73,24 @@ func (n *Project) Init(props properties.Properties, env platform.Environment) {
 			Fetcher: n.getCargoPackage,
 		},
 		{
-			Name:    "poetry",
+			Name:    "python",
 			Files:   []string{"pyproject.toml"},
-			Fetcher: n.getPoetryPackage,
+			Fetcher: n.getPythonPackage,
+		},
+		{
+			Name:    "mojo",
+			Files:   []string{"mojoproject.toml"},
+			Fetcher: n.getPythonPackage,
 		},
 		{
 			Name:    "php",
 			Files:   []string{"composer.json"},
 			Fetcher: n.getNodePackage,
+		},
+		{
+			Name:    "dart",
+			Files:   []string{"pubspec.yaml"},
+			Fetcher: n.getDartPackage,
 		},
 		{
 			Name:    "nuspec",
@@ -110,7 +99,7 @@ func (n *Project) Init(props properties.Properties, env platform.Environment) {
 		},
 		{
 			Name:    "dotnet",
-			Files:   []string{"*.vbproj", "*.fsproj", "*.csproj"},
+			Files:   []string{"*.sln", "*.slnf", "*.vbproj", "*.fsproj", "*.csproj"},
 			Fetcher: n.getDotnetProject,
 		},
 		{
@@ -124,15 +113,35 @@ func (n *Project) Init(props properties.Properties, env platform.Environment) {
 			Fetcher: n.getPowerShellModuleData,
 		},
 	}
+
+	for _, item := range n.projects {
+		// allow files override
+		property := properties.Property(fmt.Sprintf("%s_files", item.Name))
+		item.Files = n.props.GetStringArray(property, item.Files)
+
+		if !n.hasProjectFile(item) {
+			continue
+		}
+
+		data := item.Fetcher(*item)
+		if data == nil {
+			continue
+		}
+
+		n.ProjectData = *data
+		n.Type = item.Name
+		return true
+	}
+
+	return n.props.GetBool(properties.AlwaysEnabled, false)
+}
+
+func (n *Project) Template() string {
+	return " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Version }}\uf487 {{.Version}} {{ end }}{{ if .Name }}{{ .Name }} {{ end }}{{ if .Target }}\uf4de {{.Target}} {{ end }}{{ end }}" //nolint:lll
 }
 
 func (n *Project) hasProjectFile(p *ProjectItem) bool {
-	for _, file := range p.Files {
-		if n.env.HasFiles(file) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(p.Files, n.env.HasFiles)
 }
 
 func (n *Project) getNodePackage(item ProjectItem) *ProjectData {
@@ -152,7 +161,7 @@ func (n *Project) getCargoPackage(item ProjectItem) *ProjectData {
 	content := n.env.FileContent(item.Files[0])
 
 	var data CargoTOML
-	_, err := toml.Decode(content, &data)
+	err := toml.Unmarshal([]byte(content), &data)
 	if err != nil {
 		n.Error = err.Error()
 		return nil
@@ -164,20 +173,38 @@ func (n *Project) getCargoPackage(item ProjectItem) *ProjectData {
 	}
 }
 
-func (n *Project) getPoetryPackage(item ProjectItem) *ProjectData {
+func (n *Project) getPythonPackage(item ProjectItem) *ProjectData {
 	content := n.env.FileContent(item.Files[0])
 
 	var data PyProjectTOML
-	_, err := toml.Decode(content, &data)
+	err := toml.Unmarshal([]byte(content), &data)
 	if err != nil {
 		n.Error = err.Error()
 		return nil
 	}
 
-	return &ProjectData{
-		Version: data.Tool.Poetry.Version,
-		Name:    data.Tool.Poetry.Name,
+	if len(data.Tool.Poetry.Version) != 0 || len(data.Tool.Poetry.Name) != 0 {
+		return &ProjectData{
+			Version: data.Tool.Poetry.Version,
+			Name:    data.Tool.Poetry.Name,
+		}
 	}
+	return &ProjectData{
+		Version: data.Project.Version,
+		Name:    data.Project.Name,
+	}
+}
+
+func (n *Project) getDartPackage(item ProjectItem) *ProjectData {
+	content := n.env.FileContent(item.Files[0])
+	var data ProjectData
+	err := yaml.Unmarshal([]byte(content), &data)
+	if err != nil {
+		n.Error = err.Error()
+		return nil
+	}
+
+	return &data
 }
 
 func (n *Project) getNuSpecPackage(_ ProjectItem) *ProjectData {
@@ -204,28 +231,42 @@ func (n *Project) getNuSpecPackage(_ ProjectItem) *ProjectData {
 	}
 }
 
-func (n *Project) getDotnetProject(_ ProjectItem) *ProjectData {
-	files := n.env.LsDir(n.env.Pwd())
+func (n *Project) getDotnetProject(item ProjectItem) *ProjectData {
 	var name string
 	var content string
+	var extension string
+
+	files := n.env.LsDir(n.env.Pwd())
+
+	extensions := make([]string, len(item.Files))
+	for i, file := range item.Files {
+		// Remove leading * and keep only the extension
+		extensions[i] = strings.TrimPrefix(file, "*")
+	}
+
 	// get the first match only
 	for _, file := range files {
-		extension := filepath.Ext(file.Name())
-		if extension == ".csproj" || extension == ".fsproj" || extension == ".vbproj" {
+		extension = filepath.Ext(file.Name())
+		if slices.Contains(extensions, extension) {
 			name = strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
 			content = n.env.FileContent(file.Name())
 			break
 		}
 	}
+
 	// the name of the parameter may differ depending on the version,
 	// so instead of xml.Unmarshal() we use regex:
+	var target string
 	tag := "(?P<TAG><.*TargetFramework.*>(?P<TFM>.*)</.*TargetFramework.*>)"
+
 	values := regex.FindNamedRegexMatch(tag, content)
-	if len(values) == 0 {
-		n.Error = errors.New("cannot extract TFM from " + name + " project file").Error()
-		return nil
+	if len(values) != 0 {
+		target = values["TFM"]
 	}
-	target := values["TFM"]
+
+	if target == "" {
+		log.Error(fmt.Errorf("cannot extract TFM from %s project file", name))
+	}
 
 	return &ProjectData{
 		Target: target,
@@ -237,17 +278,22 @@ func (n *Project) getPowerShellModuleData(_ ProjectItem) *ProjectData {
 	files := n.env.LsDir(n.env.Pwd())
 	var content string
 	// get the first match only
+	// excluding PSScriptAnalyzerSettings.psd1
 	for _, file := range files {
-		if filepath.Ext(file.Name()) == ".psd1" {
+		if filepath.Ext(file.Name()) == ".psd1" && file.Name() != "PSScriptAnalyzerSettings.psd1" {
 			content = n.env.FileContent(file.Name())
 			break
 		}
 	}
 
-	data := &ProjectData{}
-	lines := strings.Split(content, "\n")
+	if content == "" {
+		return nil
+	}
 
-	for _, line := range lines {
+	data := &ProjectData{}
+	lines := strings.SplitSeq(content, "\n")
+
+	for line := range lines {
 		splitted := strings.SplitN(line, "=", 2)
 		if len(splitted) < 2 {
 			continue
@@ -271,7 +317,7 @@ func (n *Project) getProjectData(item ProjectItem) *ProjectData {
 	content := n.env.FileContent(item.Files[0])
 
 	var data ProjectData
-	_, err := toml.Decode(content, &data)
+	err := toml.Unmarshal([]byte(content), &data)
 	if err != nil {
 		n.Error = err.Error()
 		return nil

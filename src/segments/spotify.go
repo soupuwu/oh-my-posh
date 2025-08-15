@@ -1,13 +1,11 @@
 package segments
 
 import (
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 )
 
 type Spotify struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	MusicPlayer
 }
@@ -26,6 +24,8 @@ const (
 	PausedIcon properties.Property = "paused_icon"
 	// StoppedIcon indicates a song is stopped
 	StoppedIcon properties.Property = "stopped_icon"
+	// AdIcon indicates an advertisement is playing
+	AdIcon properties.Property = "ad_icon"
 
 	playing = "playing"
 	stopped = "stopped"
@@ -46,9 +46,4 @@ func (s *Spotify) resolveIcon() {
 	case playing:
 		s.Icon = s.props.GetString(PlayingIcon, "\uE602 ")
 	}
-}
-
-func (s *Spotify) Init(props properties.Properties, env platform.Environment) {
-	s.props = props
-	s.env = env
 }

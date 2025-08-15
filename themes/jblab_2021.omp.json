@@ -48,7 +48,6 @@
           "foreground": "#FFFFFF",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -86,9 +85,9 @@
           "foreground": "#ffffff",
           "leading_diamond": "<transparent,background>\ue0b0</>",
           "style": "diamond",
-          "template": "<transparent> \uf12a</> {{ .Meaning }} ",
+          "template": "<transparent> \uf12a</> {{ reason .Code }} ",
           "trailing_diamond": "\ue0b0",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -96,5 +95,5 @@
   ],
   "console_title_template": "{{if .Root}} \u26a1 {{end}}{{.Folder | replace \"~\" \"🏠\"}} @ {{.HostName}}",
   "final_space": true,
-  "version": 2
+  "version": 3
 }

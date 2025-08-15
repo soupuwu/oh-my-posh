@@ -1,41 +1,39 @@
 package template
 
-func interFaceToInt(e interface{}) int {
-	if val, OK := e.(int); OK {
+import "github.com/jandedobbeleer/oh-my-posh/src/generics"
+
+func toIntOrZero(e any) int {
+	if value, err := generics.TryParseInt[int](e); err == nil {
+		return value
+	}
+
+	return 0
+}
+
+func toInt(integer any) (int, error) {
+	return generics.TryParseInt[int](integer)
+}
+
+func toFloat64(e any) float64 {
+	if val, err := generics.TryParseFloat[float64](e); err == nil {
 		return val
-	}
-	if val, OK := e.(float64); OK {
-		return int(val)
-	}
-	if val, OK := e.(int64); OK {
-		return int(val)
 	}
 	return 0
 }
 
-func interfaceToFloat64(e interface{}) float64 {
-	if val, OK := e.(float64); OK {
-		return val
-	}
-	if val, OK := e.(int); OK {
-		return float64(val)
-	}
-	if val, OK := e.(int64); OK {
-		return float64(val)
-	}
-	return 0
-}
-
-func gt(e1, e2 interface{}) bool {
+func gt(e1, e2 any) bool {
 	if val, OK := e1.(int); OK {
-		return val > interFaceToInt(e2)
+		return val > toIntOrZero(e2)
+	}
+	if val, OK := e1.(int64); OK {
+		return val > int64(toIntOrZero(e2))
 	}
 	if val, OK := e1.(float64); OK {
-		return val > interfaceToFloat64(e2)
+		return val > toFloat64(e2)
 	}
 	return false
 }
 
-func lt(e1, e2 interface{}) bool {
+func lt(e1, e2 any) bool {
 	return gt(e2, e1)
 }

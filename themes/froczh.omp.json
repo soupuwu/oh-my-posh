@@ -46,7 +46,6 @@
                     "foreground": "#000000",
                     "powerline_symbol": "\ue0b0",
                     "properties": {
-                        "fetch_stash_count": true,
                         "fetch_status": true
                     },
                     "style": "powerline",
@@ -70,6 +69,14 @@
                     "template": " \uE753 {{ if .Error }}<#FE4A49>?</>{{ else }}{{ .Full }}{{ end }} "
                 },
                 {
+                    "type": "aurelia",
+                    "style": "powerline",
+                    "powerline_symbol": "\uE0B0",
+                    "background": "#000000",
+                    "foreground": "#ffffff",
+                    "template": " \uE753 {{ if .Error }}<#DE1F84>?</>{{ else }}{{ .Full }}{{ end }} "
+                },
+                {
                     "type": "node",
                     "style": "powerline",
                     "powerline_symbol": "\ue0b0",
@@ -90,8 +97,8 @@
                     "foreground": "#ffffff",
                     "powerline_symbol": "\ue0b0",
                     "style": "powerline",
-                    "template": "<transparent> \uf12a</> {{ .Meaning }} ",
-                    "type": "exit"
+                    "template": "<transparent> \uf12a</> {{ reason .Code }} ",
+                    "type": "status"
                 }
             ],
             "type": "prompt"
@@ -138,12 +145,12 @@
                     },
                     "style": "plain",
                     "template": "\u276f ",
-                    "type": "exit"
+                    "type": "status"
                 }
             ],
             "type": "prompt"
         }
     ],
     "console_title_template": "{{if .Root}} \u26a1 {{end}}{{.Folder | replace \"~\" \"🏚\" }} @ {{.HostName}}",
-    "version": 2
+    "version": 3
 }

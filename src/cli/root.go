@@ -3,17 +3,27 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/spf13/cobra"
 )
 
 var (
-	config         string
-	displayVersion bool
+	configFlag   string
+	shellName    string
+	printVersion bool
+	trace        bool
+	exitcode     int
 
-	// Version number of oh-my-posh
-	cliVersion string
+	// for internal use only
+	silent bool
+
+	// deprecated
+	initialize bool
 )
 
 var RootCmd = &cobra.Command{
@@ -25,33 +35,82 @@ experience, regardless of where you are. For a detailed guide
 on getting started, have a look at the docs at https://ohmyposh.dev`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if initialize {
-			runInit(strings.ToLower(shellName))
+			runInit(strings.ToLower(shellName), getFullCommand(cmd, args))
 			return
 		}
-		if displayVersion {
-			fmt.Println(cliVersion)
+
+		if printVersion {
+			fmt.Println(build.Version)
 			return
 		}
+
 		_ = cmd.Help()
+	},
+	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+		traceEnv := os.Getenv("POSH_TRACE")
+		if traceEnv == "" && !trace {
+			return
+		}
+
+		trace = true
+
+		log.Enable(true)
+
+		log.Debug("oh-my-posh version", build.Version)
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		defer func() {
+			if exitcode != 0 {
+				os.Exit(exitcode)
+			}
+		}()
+
+		if !trace {
+			return
+		}
+
+		timestamp := time.Now().Format("20060102T150405.000")
+		cli := append([]string{cmd.Name()}, args...)
+		filename := fmt.Sprintf("%s-%s.log", timestamp, strings.Join(cli, "-"))
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+
+		logPath := filepath.Join(home, ".oh-my-posh")
+		err = os.MkdirAll(logPath, 0755)
+		if err != nil {
+			return
+		}
+
+		err = os.WriteFile(filepath.Join(logPath, filename), []byte(log.String()), 0644)
+		if err != nil {
+			return
+		}
 	},
 }
 
-func Execute(version string) {
-	cliVersion = version
+func Execute() {
 	if err := RootCmd.Execute(); err != nil {
-		os.Exit(1)
+		// software error
+		os.Exit(70)
 	}
 }
 
-// Backwards compatibility
-var (
-	shellName  string
-	initialize bool
-)
+func init() {
+	RootCmd.PersistentFlags().StringVarP(&configFlag, "config", "c", "", "config file path")
+	RootCmd.PersistentFlags().BoolVar(&silent, "silent", false, "do not print anything")
+	RootCmd.PersistentFlags().BoolVar(&trace, "trace", false, "enable tracing")
+	RootCmd.Flags().BoolVar(&printVersion, "version", false, "print the version number and exit")
 
-func init() { //nolint:gochecknoinits
-	RootCmd.PersistentFlags().StringVarP(&config, "config", "c", "", "config file path")
-	RootCmd.Flags().BoolVarP(&initialize, "init", "i", false, "init (deprecated)")
-	RootCmd.Flags().BoolVar(&displayVersion, "version", false, "version")
-	RootCmd.Flags().StringVarP(&shellName, "shell", "s", "", "shell (deprecated)")
+	// Deprecated flags, should be kept to avoid breaking CLI integration.
+	RootCmd.Flags().BoolVarP(&initialize, "init", "i", false, "init")
+	RootCmd.Flags().StringVarP(&shellName, "shell", "s", "", "shell")
+
+	// Hide flags that are deprecated or for internal use only.
+	_ = RootCmd.PersistentFlags().MarkHidden("silent")
+
+	// Disable completions
+	RootCmd.CompletionOptions.DisableDefaultCmd = true
 }

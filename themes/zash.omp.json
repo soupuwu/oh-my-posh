@@ -38,12 +38,12 @@
           "foreground": "#DCB977",
           "style": "plain",
           "template": " \uf119",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
   "final_space": true,
-  "version": 2
+  "version": 3
 }

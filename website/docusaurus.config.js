@@ -5,27 +5,37 @@ module.exports = {
   tagline: 'A prompt theme engine for any shell.',
   url: 'https://ohmyposh.dev',
   baseUrl: '/',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicons.svg',
   organizationName: 'jandedobbeleer',
   projectName: 'oh-my-posh',
   onBrokenLinks: 'ignore',
   plugins: [
-    path.resolve(__dirname, 'plugins', 'appinsights'),
-    'docusaurus-node-polyfills'
+    path.resolve(__dirname, 'plugins', 'appinsights')
   ],
   stylesheets: [
     "https://rsms.me/inter/inter.css",
     "https://fonts.googleapis.com/css2?family=Fira+Code&display=swap"
   ],
   themeConfig: {
+    colorMode: {
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
+    },
     prism: {
-      additionalLanguages: ['powershell', 'lua', 'jsstacktrace', 'toml'],
+      additionalLanguages: ['powershell', 'lua', 'jsstacktrace', 'toml', 'json', 'yaml'],
+    },
+    docs: {
+        sidebar: {
+          hideable: true,
+        },
     },
     navbar: {
       title: 'Oh My Posh',
       logo: {
         alt: 'Oh My Posh Logo',
-        src: 'img/logo.svg',
+        src: 'img/logo-dark.svg',
+        srcDark: 'img/logo-light.svg',
       },
       items: [
         {
@@ -45,6 +55,11 @@ module.exports = {
           position: 'left',
         },
         {
+          href: 'https://polar.sh/oh-my-posh',
+          label: 'Buy',
+          position: 'left',
+        },
+        {
           href: 'https://swag.ohmyposh.dev',
           label: 'Swag',
           position: 'left',
@@ -56,9 +71,9 @@ module.exports = {
           position: 'right',
         },
         {
-          href: 'https://www.gitkraken.com/invite/nQmDPR9D',
-          className: 'header-gk-link',
-          'aria-label': 'GitKraken',
+          href: 'https://www.warp.dev/oh-my-posh',
+          className: 'header-affiliate-link',
+          'aria-label': 'Warp',
           position: 'right',
         },
         {
@@ -116,8 +131,12 @@ module.exports = {
               href: 'https://github.com/sponsors/JanDeDobbeleer',
             },
             {
-              label: 'GitKraken',
-              href: 'https://www.gitkraken.com/invite/nQmDPR9D',
+              label: 'Buy',
+              href: 'https://polar.sh/oh-my-posh',
+            },
+            {
+              label: 'Warp',
+              href: 'https://www.warp.dev/oh-my-posh',
             },
             {
               label: 'Docusaurus',
@@ -131,6 +150,14 @@ module.exports = {
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} <a href='https://github.com/sponsors/JanDeDobbeleer' target='_blank'>Jan De Dobbeleer</a> and <a href='/docs/contributors'>contributors</a>.`,
+    },
+    announcementBar: {
+      id: 'support_us',
+      content:
+        'If you\'re enjoying Oh My Posh, consider becoming a <a target="_blank" rel="noopener noreferrer" href="https://github.com/sponsors/JanDeDobbeleer">sponsor</a> to keep the project going strong 💪',
+      backgroundColor: '#2c7ae0',
+      textColor: '#ffffff',
+      isCloseable: false,
     },
     appInsights: {
       instrumentationKey: '51741aa7-e087-4e80-b7b0-0863d467462a',
@@ -154,6 +181,9 @@ module.exports = {
             require.resolve('./src/css/prism-rose-pine-moon.css'),
             require.resolve('./src/css/custom.css')
           ],
+        },
+        blog: {
+          onInlineAuthors: 'ignore'
         },
       },
     ],

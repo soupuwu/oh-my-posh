@@ -42,7 +42,6 @@
           "foreground": "#000000",
           "leading_diamond": "<parentBackground,background>\ue0b0</>",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true
           },
           "style": "diamond",
@@ -69,8 +68,8 @@
             "always_enabled": true
           },
           "style": "plain",
-          "template": "{{ if gt .Code 0 }}<parentBackground,background>\ue0b0</><transparent> \uf12a</> {{ .Meaning }} <background,transparent>\ue0b0</>{{ else }}<parentBackground,transparent>\ue0b0</>{{ end }}",
-          "type": "exit"
+          "template": "{{ if gt .Code 0 }}<parentBackground,background>\ue0b0</><transparent> \uf12a</> {{ reason .Code }} <background,transparent>\ue0b0</>{{ else }}<parentBackground,transparent>\ue0b0</>{{ end }}",
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -113,12 +112,12 @@
           },
           "style": "plain",
           "template": "\u276f ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
   "console_title_template": "{{if .Root}} \u26a1 {{end}}{{.Folder | replace \"~\" \"🏚\" }} @ {{.HostName}}",
-  "version": 2
+  "version": 3
 }

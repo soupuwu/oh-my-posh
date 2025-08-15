@@ -6,42 +6,42 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 )
 
 type Az struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
-	AzureSubscription
 	Origin string
+	AzureSubscription
 }
 
 const (
 	Source properties.Property = "source"
 
-	pwsh       = "pwsh"
-	cli        = "cli"
-	firstMatch = "first_match"
+	Pwsh = "pwsh"
+	Cli  = "cli"
+	// this deprecated value is used to support the old behavior of first_match
+	FirstMatch = "cli|pwsh"
 	azureEnv   = "POSH_AZURE_SUBSCRIPTION"
 )
 
 type AzureConfig struct {
-	Subscriptions  []*AzureSubscription `json:"subscriptions"`
 	InstallationID string               `json:"installationId"`
+	Subscriptions  []*AzureSubscription `json:"subscriptions"`
 }
 
 type AzureSubscription struct {
-	ID               string        `json:"id"`
-	Name             string        `json:"name"`
-	State            string        `json:"state"`
-	User             *AzureUser    `json:"user"`
-	IsDefault        bool          `json:"isDefault"`
-	TenantID         string        `json:"tenantId"`
-	EnvironmentName  string        `json:"environmentName"`
-	HomeTenantID     string        `json:"homeTenantId"`
-	ManagedByTenants []interface{} `json:"managedByTenants"`
+	User              *AzureUser `json:"user"`
+	ID                string     `json:"id"`
+	Name              string     `json:"name"`
+	State             string     `json:"state"`
+	TenantID          string     `json:"tenantId"`
+	TenantDisplayName string     `json:"tenantDisplayName"`
+	EnvironmentName   string     `json:"environmentName"`
+	HomeTenantID      string     `json:"homeTenantId"`
+	ManagedByTenants  []any      `json:"managedByTenants"`
+	IsDefault         bool       `json:"isDefault"`
 }
 
 type AzureUser struct {
@@ -66,7 +66,8 @@ type AzurePowerShellSubscription struct {
 		} `json:"ExtendedProperties"`
 	} `json:"Subscription"`
 	Tenant struct {
-		ID string `json:"Id"`
+		ID   string `json:"Id"`
+		Name string `json:"Name"`
 	} `json:"Tenant"`
 }
 
@@ -74,21 +75,29 @@ func (a *Az) Template() string {
 	return NameTemplate
 }
 
-func (a *Az) Init(props properties.Properties, env platform.Environment) {
-	a.props = props
-	a.env = env
-}
-
 func (a *Az) Enabled() bool {
-	source := a.props.GetString(Source, firstMatch)
-	switch source {
-	case firstMatch:
-		return a.getCLISubscription() || a.getModuleSubscription()
-	case pwsh:
-		return a.getModuleSubscription()
-	case cli:
-		return a.getCLISubscription()
+	source := a.props.GetString(Source, FirstMatch)
+
+	// migrate first_match
+	if source == "first_match" {
+		source = FirstMatch
 	}
+
+	sources := strings.SplitSeq(source, "|")
+
+	for source := range sources {
+		switch source {
+		case Pwsh:
+			if OK := a.getModuleSubscription(); OK {
+				return OK
+			}
+		case Cli:
+			if OK := a.getCLISubscription(); OK {
+				return OK
+			}
+		}
+	}
+
 	return false
 }
 
@@ -104,7 +113,7 @@ func (a *Az) getCLISubscription() bool {
 		return false
 	}
 	content := a.FileContentWithoutBom(cfg)
-	if len(content) == 0 {
+	if content == "" {
 		return false
 	}
 	var config AzureConfig
@@ -123,13 +132,15 @@ func (a *Az) getCLISubscription() bool {
 
 func (a *Az) getModuleSubscription() bool {
 	envSubscription := a.env.Getenv(azureEnv)
-	if len(envSubscription) == 0 {
+	if envSubscription == "" {
 		return false
 	}
+
 	var config AzurePowerShellSubscription
 	if err := json.Unmarshal([]byte(envSubscription), &config); err != nil {
 		return false
 	}
+
 	a.IsDefault = true
 	a.EnvironmentName = config.Environment.Name
 	a.TenantID = config.Tenant.ID
@@ -140,7 +151,10 @@ func (a *Az) getModuleSubscription() bool {
 		Name: config.Subscription.ExtendedProperties.Account,
 		Type: config.Account.Type,
 	}
+	a.TenantDisplayName = config.Tenant.Name
+
 	a.Origin = "PWSH"
+
 	return true
 }
 

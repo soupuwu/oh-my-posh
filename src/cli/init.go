@@ -2,87 +2,166 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/engine"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
-
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
 	printOutput bool
 	strict      bool
-	manual      bool
+	debug       bool
 
-	initCmd = &cobra.Command{
-		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu] --config ~/.mytheme.omp.json",
+	supportedShells = []string{
+		"bash",
+		"zsh",
+		"fish",
+		"powershell",
+		"pwsh",
+		"cmd",
+		"nu",
+		"elvish",
+		"xonsh",
+	}
+
+	initCmd = createInitCmd()
+)
+
+func init() {
+	RootCmd.AddCommand(initCmd)
+}
+
+func createInitCmd() *cobra.Command {
+	initCmd := &cobra.Command{
+		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu|elvish|xonsh]",
 		Short: "Initialize your shell and config",
 		Long: `Initialize your shell and config.
 
 See the documentation to initialize your shell: https://ohmyposh.dev/docs/installation/prompt.`,
-		ValidArgs: []string{
-			"bash",
-			"zsh",
-			"fish",
-			"powershell",
-			"pwsh",
-			"cmd",
-			"nu",
-			"tcsh",
-			"elvish",
-			"xonsh",
-		},
-		Args: NoArgsOrOneValidArg,
+		ValidArgs: supportedShells,
+		Args:      NoArgsOrOneValidArg,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) == 0 {
 				_ = cmd.Help()
 				return
 			}
-			runInit(args[0])
+
+			runInit(args[0], getFullCommand(cmd, args))
 		},
 	}
-)
 
-func init() { //nolint:gochecknoinits
 	initCmd.Flags().BoolVarP(&printOutput, "print", "p", false, "print the init script")
 	initCmd.Flags().BoolVarP(&strict, "strict", "s", false, "run in strict mode")
-	initCmd.Flags().BoolVarP(&manual, "manual", "m", false, "enable/disable manual mode")
+	initCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
+	initCmd.Flags().BoolVar(&eval, "eval", false, "output the prompt for eval")
+
 	_ = initCmd.MarkPersistentFlagRequired("config")
-	RootCmd.AddCommand(initCmd)
+
+	return initCmd
 }
 
-func runInit(shellName string) {
-	env := &platform.Shell{
-		CmdFlags: &platform.Flags{
-			Shell:   shellName,
-			Config:  config,
-			Strict:  strict,
-			Manual:  manual,
-			Version: cliVersion,
-		},
+func runInit(sh, command string) {
+	var startTime time.Time
+
+	if debug {
+		startTime = time.Now()
+		log.Enable(plain)
 	}
-	env.Init()
-	defer env.Close()
-	cfg := engine.LoadConfig(env)
-	shell.Transient = cfg.TransientPrompt != nil
-	shell.ErrorLine = cfg.ErrorLine != nil || cfg.ValidLine != nil
-	shell.Tooltips = len(cfg.Tooltips) > 0
-	shell.ShellIntegration = cfg.ShellIntegration
-	for i, block := range cfg.Blocks {
-		// only fetch cursor position when relevant
-		if i == 0 && block.Newline {
-			shell.Cursor = true
-		}
-		if block.Type == engine.RPrompt {
-			shell.RPrompt = true
-		}
+
+	cfg, hash := config.Load(configFlag, sh, false)
+
+	flags := &runtime.Flags{
+		Shell:     sh,
+		Config:    cfg.Source,
+		Strict:    strict,
+		Debug:     debug,
+		SaveCache: true,
+		Init:      true,
+		Eval:      eval,
 	}
-	if printOutput {
-		init := shell.PrintInit(env)
-		fmt.Print(init)
+
+	env := &runtime.Terminal{}
+	env.Init(flags)
+
+	template.Init(env, cfg.Var, cfg.Maps)
+
+	defer func() {
+		template.SaveCache()
+		env.Close()
+	}()
+
+	feats := cfg.Features(env)
+	flags.ConfigHash = fmt.Sprintf("%s.%s", hash, feats.Hash())
+
+	var output string
+
+	switch {
+	case printOutput, debug:
+		output = shell.PrintInit(env, feats, &startTime)
+	default:
+		output = shell.Init(env, feats)
+	}
+
+	if !debug {
+		configDSC := config.DSC()
+		configDSC.Load(env.Cache())
+		configDSC.Add(configFlag)
+		configDSC.Save()
+
+		shellDSC := shell.DSC()
+		shellDSC.Load(env.Cache())
+		shellDSC.Add(&shell.Shell{
+			Command: command,
+			Name:    sh,
+		})
+		shellDSC.Save()
+	}
+
+	if silent {
 		return
 	}
-	init := shell.Init(env)
-	fmt.Print(init)
+
+	fmt.Print(output)
+}
+
+func getFullCommand(cmd *cobra.Command, args []string) string {
+	// Start with the command path
+	cmdPath := cmd.CommandPath()
+
+	// Add arguments
+	if len(args) > 0 {
+		cmdPath += " " + strings.Join(args, " ")
+	}
+
+	// Add flags that were actually set
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if !flag.Changed {
+			return
+		}
+
+		if flag.Value.Type() == "bool" && flag.Value.String() == "true" {
+			cmdPath += fmt.Sprintf(" --%s", flag.Name)
+			return
+		}
+
+		if flag.Name == "config" {
+			configPath := filepath.Clean(flag.Value.String())
+			configPath = strings.ReplaceAll(configPath, path.Home(), "~")
+			cmdPath += fmt.Sprintf(" --%s=%s", flag.Name, configPath)
+			return
+		}
+
+		cmdPath += fmt.Sprintf(" --%s=%s", flag.Name, flag.Value.String())
+	})
+
+	return cmdPath
 }

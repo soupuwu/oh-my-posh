@@ -1,6 +1,7 @@
 package segments
 
 import (
+	"path"
 	"strconv"
 	"strings"
 
@@ -38,11 +39,10 @@ const (
 )
 
 type Svn struct {
-	scm
-
 	Working *SvnStatus
-	BaseRev int
 	Branch  string
+	scm
+	BaseRev int
 }
 
 func (s *Svn) Template() string {
@@ -59,36 +59,41 @@ func (s *Svn) Enabled() bool {
 	return true
 }
 
+func (s *Svn) CacheKey() (string, bool) {
+	dir, err := s.env.HasParentFilePath(".svn", true)
+	if err != nil {
+		return "", false
+	}
+
+	return dir.Path, true
+}
+
 func (s *Svn) shouldDisplay() bool {
 	if !s.hasCommand(SVNCOMMAND) {
 		return false
 	}
 
-	Svndir, err := s.env.HasParentFilePath(".svn")
+	Svndir, err := s.env.HasParentFilePath(".svn", false)
 	if err != nil {
 		return false
 	}
 
-	if s.shouldIgnoreRootRepository(Svndir.ParentFolder) {
-		return false
-	}
-
 	if Svndir.IsDir {
-		s.workingDir = Svndir.Path
-		s.rootDir = Svndir.Path
+		s.mainSCMDir = Svndir.Path
+		s.scmDir = Svndir.Path
 		// convert the worktree file path to a windows one when in a WSL shared folder
-		s.realDir = strings.TrimSuffix(s.convertToWindowsPath(Svndir.Path), "/.svn")
+		s.repoRootDir = strings.TrimSuffix(s.convertToWindowsPath(Svndir.Path), "/.svn")
 		return true
 	}
 
 	// handle worktree
-	s.rootDir = Svndir.Path
+	s.scmDir = Svndir.Path
 	dirPointer := strings.Trim(s.env.FileContent(Svndir.Path), " \r\n")
 	matches := regex.FindNamedRegexMatch(`^Svndir: (?P<dir>.*)$`, dirPointer)
 	if matches != nil && matches["dir"] != "" {
 		// if we open a worktree file in a WSL shared folder, we have to convert it back
 		// to the mounted path
-		s.workingDir = s.convertToLinuxPath(matches["dir"])
+		s.mainSCMDir = s.convertToLinuxPath(matches["dir"])
 	}
 	return false
 }
@@ -110,12 +115,12 @@ func (s *Svn) setSvnStatus() {
 	}
 
 	changes := s.getSvnCommandOutput("status")
-	if len(changes) == 0 {
+	if changes == "" {
 		return
 	}
-	lines := strings.Split(changes, "\n")
-	for _, line := range lines {
-		if len(line) == 0 {
+	lines := strings.SplitSeq(changes, "\n")
+	for line := range lines {
+		if line == "" {
 			continue
 		}
 		// element is the element from someSlice for where we are
@@ -123,8 +128,20 @@ func (s *Svn) setSvnStatus() {
 	}
 }
 
+func (s *Svn) Repo() string {
+	// Get the repository name as the last path element of the repository root URL
+	repo := s.getSvnCommandOutput("info", "--show-item", "repos-root-url")
+	base := path.Base(repo)
+
+	if base == "." {
+		return ""
+	}
+
+	return base
+}
+
 func (s *Svn) getSvnCommandOutput(command string, args ...string) string {
-	args = append([]string{command, s.realDir}, args...)
+	args = append([]string{command, s.repoRootDir}, args...)
 	val, err := s.env.RunCommand(s.command, args...)
 	if err != nil {
 		return ""

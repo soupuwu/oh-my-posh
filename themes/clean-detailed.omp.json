@@ -33,7 +33,7 @@
           "foreground": "#ffffff",
           "leading_diamond": "\ue0b2",
           "style": "diamond",
-          "template": "\ue266 MEM: {{ round .PhysicalPercentUsed .Precision }}% | {{ (div ((sub .PhysicalTotalMemory .PhysicalFreeMemory)|float64) 1000000000.0) }}/{{ (div .PhysicalTotalMemory 1000000000.0) }}GB \ue266 ",
+          "template": "\ue266 MEM: {{ round .PhysicalPercentUsed .Precision }}% | {{ (div ((sub .PhysicalTotalMemory .PhysicalAvailableMemory)|float64) 1073741824.0) }}/{{ (div .PhysicalTotalMemory 1073741824.0) }}GB \ue266 ",
           "trailing_diamond": "<transparent,#516BEB>\ue0b2</>",
           "type": "sysinfo"
         },
@@ -62,7 +62,6 @@
           "leading_diamond": "\ue0b2",
           "properties": {
             "branch_icon": "\ue725 ",
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true,
             "fetch_worktree_count": true
@@ -120,7 +119,7 @@
           },
           "style": "plain",
           "template": "\u2570\u2500 ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -132,5 +131,5 @@
     "foreground": "#FEF5ED",
     "template": "\ue285 "
   },
-  "version": 2
+  "version": 3
 }

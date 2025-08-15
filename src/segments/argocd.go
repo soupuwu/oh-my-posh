@@ -6,15 +6,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	argocdOptsEnv     = "ARGOCD_OPTS"
-	argocdInvalidFlag = "invalid flag"
 	argocdInvalidYaml = "invalid yaml"
 	argocdNoCurrent   = "no current context"
 
@@ -28,13 +26,12 @@ type ArgocdContext struct {
 }
 
 type ArgocdConfig struct {
-	Contexts       []*ArgocdContext `yaml:"contexts"`
 	CurrentContext string           `yaml:"current-context"`
+	Contexts       []*ArgocdContext `yaml:"contexts"`
 }
 
 type Argocd struct {
-	props properties.Properties
-	env   platform.Environment
+	base
 
 	ArgocdContext
 }
@@ -43,17 +40,12 @@ func (a *Argocd) Template() string {
 	return NameTemplate
 }
 
-func (a *Argocd) Init(props properties.Properties, env platform.Environment) {
-	a.props = props
-	a.env = env
-}
-
 func (a *Argocd) Enabled() bool {
 	// always parse config instead of using cli to save time
 	configPath := a.getConfigPath()
 	succeeded, err := a.parseConfig(configPath)
 	if err != nil {
-		a.env.Error(err)
+		log.Error(err)
 		return false
 	}
 	return succeeded
@@ -84,21 +76,21 @@ func (a *Argocd) getConfigFromOpts() string {
 func (a *Argocd) parseConfig(file string) (bool, error) {
 	config := a.env.FileContent(file)
 	// missing or empty file content
-	if len(config) == 0 {
+	if config == "" {
 		return false, errors.New(argocdInvalidYaml)
 	}
 
 	var data ArgocdConfig
 	err := yaml.Unmarshal([]byte(config), &data)
 	if err != nil {
-		a.env.Error(err)
+		log.Error(err)
 		return false, errors.New(argocdInvalidYaml)
 	}
 	a.Name = data.CurrentContext
 	for _, context := range data.Contexts {
 		if context.Name == a.Name {
 			// mandatory fields in yaml
-			if len(context.Server) == 0 || len(context.User) == 0 {
+			if context.Server == "" || context.User == "" {
 				return false, errors.New(argocdInvalidYaml)
 			}
 			a.Server = context.Server

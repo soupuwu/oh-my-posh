@@ -45,11 +45,11 @@
           },
           "style": "plain",
           "template": "> ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

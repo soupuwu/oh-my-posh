@@ -3,7 +3,8 @@ package segments
 import (
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 )
 
 // SaplingStatus represents part of the status of a Sapling repository
@@ -44,17 +45,15 @@ const (
 )
 
 type Sapling struct {
-	scm
-
+	Working     *SaplingStatus
 	ShortHash   string
 	Hash        string
 	When        string
 	Author      string
 	Bookmark    string
 	Description string
-	New         bool
-
-	Working *SaplingStatus
+	scm
+	New bool
 }
 
 func (sl *Sapling) Template() string {
@@ -72,34 +71,44 @@ func (sl *Sapling) Enabled() bool {
 }
 
 func (sl *Sapling) shouldDisplay() bool {
+	sl.command = SAPLINGCOMMAND
+
 	if !sl.hasCommand(SAPLINGCOMMAND) {
 		return false
 	}
 
-	slDir, err := sl.env.HasParentFilePath(".sl")
+	slDir, err := sl.env.HasParentFilePath(".sl", false)
 	if err != nil {
 		return false
 	}
 
-	if sl.shouldIgnoreRootRepository(slDir.ParentFolder) {
-		return false
-	}
-
-	sl.workingDir = slDir.Path
-	sl.rootDir = slDir.Path
+	sl.mainSCMDir = slDir.Path
+	sl.scmDir = slDir.Path
 	// convert the worktree file path to a windows one when in a WSL shared folder
-	sl.realDir = strings.TrimSuffix(sl.convertToWindowsPath(slDir.Path), "/.sl")
-	sl.RepoName = platform.Base(sl.env, sl.convertToLinuxPath(sl.realDir))
+	sl.repoRootDir = strings.TrimSuffix(sl.convertToWindowsPath(slDir.Path), "/.sl")
+	sl.RepoName = path.Base(sl.convertToLinuxPath(sl.repoRootDir))
 	sl.setDir(slDir.Path)
+
 	return true
 }
 
+func (sl *Sapling) CacheKey() (string, bool) {
+	dir, err := sl.env.HasParentFilePath(".sl", true)
+	if err != nil {
+		return "", false
+	}
+
+	return dir.Path, true
+}
+
 func (sl *Sapling) setDir(dir string) {
-	dir = platform.ReplaceHomeDirPrefixWithTilde(sl.env, dir) // align with template PWD
-	if sl.env.GOOS() == platform.WINDOWS {
+	dir = path.ReplaceHomeDirPrefixWithTilde(dir) // align with template PWD
+
+	if sl.env.GOOS() == runtime.WINDOWS {
 		sl.Dir = strings.TrimSuffix(dir, `\.sl`)
 		return
 	}
+
 	sl.Dir = strings.TrimSuffix(dir, "/.sl")
 }
 
@@ -115,13 +124,13 @@ func (sl *Sapling) setHeadContext() {
 	}
 
 	changes := sl.getSaplingCommandOutput("status")
-	if len(changes) == 0 {
+	if changes == "" {
 		return
 	}
-	lines := strings.Split(changes, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(changes, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
-		if len(line) == 0 {
+		if line == "" {
 			continue
 		}
 		// element is the element from someSlice for where we are
@@ -131,12 +140,12 @@ func (sl *Sapling) setHeadContext() {
 
 func (sl *Sapling) setCommitContext() {
 	body := sl.getSaplingCommandOutput("log", "--limit", "1", "--template", SLCOMMITTEMPLATE)
-	if len(body) == 0 {
+	if body == "" {
 		sl.New = true
 		return
 	}
-	splitted := strings.Split(strings.TrimSpace(body), "\n")
-	for _, line := range splitted {
+	splitted := strings.SplitSeq(strings.TrimSpace(body), "\n")
+	for line := range splitted {
 		line = strings.TrimSpace(line)
 		if len(line) <= 3 {
 			continue

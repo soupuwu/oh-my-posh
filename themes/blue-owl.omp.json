@@ -44,7 +44,6 @@
           "foreground": "#000000",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true
           },
           "style": "powerline",
@@ -69,8 +68,8 @@
           "foreground": "#ffffff",
           "powerline_symbol": "\ue0b0",
           "style": "powerline",
-          "template": "<transparent> \uf12a</> {{ .Meaning }} ",
-          "type": "exit"
+          "template": "<transparent> \uf12a</> {{ reason .Code }} ",
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -82,8 +81,9 @@
           "background": "#29315A",
           "foreground": "#43CCEA",
           "leading_diamond": "\ue0c5",
+          "trailing_diamond": "\ue0bc",
           "style": "diamond",
-          "template": "  {{ .UserName }}<transparent> / </>{{ .HostName }}",
+          "template": "  {{ .UserName }}<transparent> / </>{{ .HostName }} ",
           "type": "session"
         },
         {
@@ -92,8 +92,9 @@
           "properties": {
             "time_format": "15:04:05"
           },
-          "style": "plain",
-          "template": "<transparent> \ue0ba\ue0bc </>{{ .CurrentDate | date .Format }} ",
+          "leading_diamond": "\ue0ba",
+          "style": "diamond",
+          "template": " {{ .CurrentDate | date .Format }} ",
           "type": "time"
         }
       ],
@@ -113,12 +114,12 @@
           },
           "style": "plain",
           "template": "\u276f ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
   "console_title_template": "{{if .Root}} \u26a1 {{end}}{{.Folder | replace \"~\" \"🏚\" }} @ {{.HostName}}",
-  "version": 2
+  "version": 3
 }

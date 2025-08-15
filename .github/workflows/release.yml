@@ -5,9 +5,13 @@ on:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'packages/**'
-      - '.github/workflows/**'
+      - "src/**"
+      - "packages/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
 
 jobs:
   changelog:
@@ -19,78 +23,118 @@ jobs:
       skipped: ${{ steps.changelog.outputs.skipped }}
     steps:
       - name: Checkout code 👋
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
       - name: Create changelog ✍️
         id: changelog
-        uses: TriPSs/conventional-changelog-action@dd19d7c07e5f620b2d6f48d547148a4b6b29e92f
+        uses: TriPSs/conventional-changelog-action@67139193614f5b9e8db87da1bd4240922b34d765
         with:
           github-token: ${{ secrets.github_token }}
           skip-version-file: "true"
           output-file: "false"
           skip-commit: "true"
           skip-on-empty: "true"
+          skip-tag: "true"
+
   artifacts:
     needs: changelog
     if: ${{ needs.changelog.outputs.skipped == 'false' }}
-    runs-on: ubuntu-latest
-    env:
-      COSIGN_KEY_LOCATION: "/tmp/cosign.key"
+    runs-on: windows-latest
     defaults:
       run:
         shell: pwsh
-        working-directory: ${{ github.workspace }}/src
+        working-directory: ${{ github.workspace }}/build
     steps:
       - name: Checkout code 👋
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
       - name: Install Go 🗳
         uses: ./.github/workflows/composite/bootstrap-go
-      - name: Tag HEAD 😸
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag ${{ needs.changelog.outputs.tag }}
-      - name: Install cosign 🔑
-        uses: sigstore/cosign-installer@6e04d228eb30da1757ee4e1dd75a0ec73a653e06
-        with:
-          cosign-release: 'v1.4.0'
-      - name: Private Key 🔐
-        run: |
-          $PSDefaultParameterValues['Out-File:Encoding']='UTF8'
-          $env:COSIGN_KEY > $env:COSIGN_KEY_LOCATION
+      - name: Pre Build 😸
         env:
-          COSIGN_KEY: ${{secrets.COSIGN_KEY}}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          ./pre.ps1 -Version ${{ needs.changelog.outputs.version }}
       - name: Run GoReleaser 🚀
-        uses: goreleaser/goreleaser-action@336e29918d653399e599bfca99fadc1d7ffbc9f7
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a
         with:
           distribution: goreleaser
-          version: latest
-          args: build --rm-dist
+          version: v2.3.2
+          args: release --clean --skip publish
           workdir: src
         env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-      - name: Zip theme files 🤐
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      - name: Post Build 🤐
         run: |
-          $compress = @{
-            Path = "../themes/*.omp.*"
-            CompressionLevel = "Fastest"
-            DestinationPath = "./dist/themes.zip"
-          }
-          Compress-Archive @compress
-      - name: Add hashes 🤫
-        run: |
-          Get-ChildItem ./dist -Exclude *.yaml,*.sig | Get-Unique |
-          Foreach-Object {
-            $zipHash = Get-FileHash $_.FullName -Algorithm SHA256
-            $zipHash.Hash | Out-File -Encoding 'UTF8' "./dist/$($_.Name).sha256"
-          }
+          ./post.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build-artifacts
+          path: |
+            src/dist/posh-*
+            src/dist/themes.*
+            src/dist/checksums.*
+  msi:
+    needs:
+      - changelog
+      - artifacts
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64, x86]
+    defaults:
+      run:
         shell: pwsh
+        working-directory: ${{ github.workspace }}/packages/msi
+    steps:
+      - name: Checkout code 👋
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: build-artifacts
+          path: dist
+      - name: Install Wix Toolset 🛠
+        run: dotnet tool install --global wix
+      - name: Build installer 📦
+        id: build
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          $version = '${{ needs.changelog.outputs.version }}'.TrimStart("v")
+          ./build.ps1 -Architecture ${{ matrix.arch }}  -Version $version -Copy -Sign
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: msi-artifact-${{ matrix.arch }}
+          path: |
+            packages/msi/out/install-${{ matrix.arch }}.msi
+            packages/msi/out/install-${{ matrix.arch }}.msi.sha256
+            packages/msi/out/install-${{ matrix.arch }}.msix
+            packages/msi/out/install-${{ matrix.arch }}.msix.sha256
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - changelog
+      - artifacts
+      - msi
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          merge-multiple: true
+      - name: Upload version file
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.CDN_CONNECTIONSTRING }}
+        run: |
+          echo v${{ needs.changelog.outputs.version }} > version.txt
+          az storage blob upload-batch --destination v${{ needs.changelog.outputs.version }} --source .
+          az storage blob upload-batch --destination latest --overwrite true --source .
       - name: Release 🎓
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8
         with:
           tag_name: ${{ needs.changelog.outputs.tag }}
           body: ${{ needs.changelog.outputs.body }}
           fail_on_unmatched_files: true
           token: ${{ secrets.GH_PAT }}
           files: |
-            src/dist/posh-*
-            src/dist/themes.*
+            *

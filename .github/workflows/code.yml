@@ -8,6 +8,10 @@ on:
       - '.github/*.md'
       - '.github/FUNDING.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 name: Validate Code
 jobs:
   test:
@@ -19,15 +23,21 @@ jobs:
       run:
         working-directory: ${{ github.workspace }}/src
     steps:
-    - name: Install Go
-      uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753
-      with:
-        go-version: 1.20.2
     - name: Checkout code
-      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+    - name: Install Go 🗳
+      uses: ./.github/workflows/composite/bootstrap-go
     - name: Golang CI
-      uses: golangci/golangci-lint-action@639cd343e1d3b897ff35927a75193d57cfcba299
+      uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9
       with:
         working-directory: src
+    - name: Fieldalignment
+      run: |
+        go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+        fieldalignment "./..."
+    - name: Modernize
+      run: |
+        go install golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest
+        modernize "./..."
     - name: Unit Tests
       run: go test -v ./...

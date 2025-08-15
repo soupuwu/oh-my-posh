@@ -81,6 +81,12 @@
           "type": "angular"
         },
         {
+          "foreground": "#de1f84",
+          "style": "plain",
+          "template": "<#ffffff>(</>{{ if .Error }}{{ .Error }}{{ else }}{{ .Full }}{{ end }}<#ffffff>)</>",
+          "type": "aurelia"
+        },
+        {
           "foreground": "#ffffff",
           "style": "plain",
           "template": "<#1e293b>(</>{{ if .Error }}{{ .Error }}{{ else }}Nx {{ .Full }}{{ end }}<#1e293b>)</>",
@@ -183,11 +189,11 @@
           },
           "style": "plain",
           "template": "\ue285\ueb9e ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

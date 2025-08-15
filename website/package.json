@@ -3,28 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "cross-env NODE_ENV=development docusaurus start",
+    "start": "cross-env NODE_ENV=development docusaurus start --poll 1000",
     "build": "docusaurus build",
-    "themes": "node export_themes.js"
+    "serve": "docusaurus serve",
+    "themes": "node export_themes.mjs",
+    "clear": "docusaurus clear"
   },
   "dependencies": {
-    "@docusaurus/core": "^2.3.1",
-    "@docusaurus/preset-classic": "^2.3.1",
-    "@docusaurus/theme-search-algolia": "^2.3.1",
-    "@iarna/toml": "^2.2.5",
-    "classnames": "^2.3.2",
-    "query-string": "7.1.1",
-    "react": "17.0.2",
-    "react-dom": "17.0.2",
-    "yaml": "^2.2.2"
-  },
-  "resolutions": {
-    "trim": "^0.0.3",
-    "got": "^11.8.5"
+    "@docusaurus/core": "^3.8.1",
+    "@docusaurus/preset-classic": "^3.8.1",
+    "@docusaurus/theme-search-algolia": "^3.8.1",
+    "@mdx-js/react": "^3.1.0",
+    "classnames": "^2.5.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "smol-toml": "^1.4.1",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
-    "docusaurus-node-polyfills": "^1.0.0"
+    "cross-env": "^7.0.3"
   },
   "browserslist": {
     "production": [
@@ -39,10 +36,10 @@
     ]
   },
   "engines": {
-    "npm": "8.9.0",
-    "node": "18.2.0"
+    "npm": "10.1.0",
+    "node": "20.9.0"
   },
   "volta": {
-    "node": "18.2.0"
+    "node": "20.9.0"
   }
 }

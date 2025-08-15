@@ -17,42 +17,49 @@ const (
 type Text string
 
 func (t Text) Green() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return "\x1b[38;2;191;207;240m" + t
 }
 
 func (t Text) Red() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return "\x1b[38;2;253;122;140m" + t
 }
 
 func (t Text) Purple() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return "\x1b[38;2;204;137;214m" + t
 }
 
 func (t Text) Yellow() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return "\x1b[38;2;156;231;201m" + t
 }
 
+func (t Text) Orange() Text {
+	if raw {
+		return t
+	}
+	return "\x1b[38;2;253;184;109m" + t
+}
+
 func (t Text) Bold() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return "\x1b[1m" + t
 }
 
 func (t Text) Plain() Text {
-	if plain {
+	if raw {
 		return t
 	}
 	return t + "\033[0m"
@@ -66,6 +73,7 @@ func printLn(lt logType, args ...string) {
 	if len(args) == 0 {
 		return
 	}
+
 	var str Text
 	switch lt {
 	case debug:
@@ -75,6 +83,7 @@ func printLn(lt logType, args ...string) {
 	case trace:
 		str = Text("[TRACE] ").Purple()
 	}
+
 	// timestamp 156, 231, 201
 	str += Text(time.Now().Format("15:04:05.000") + " ").Yellow().Plain()
 	str += Text(args[0])
@@ -88,7 +97,7 @@ func parseArgs(args ...string) Text {
 	}
 
 	// display empty return values as NO DATA
-	if len(args[1]) == 0 {
+	if args[1] == "" {
 		text := Text(" \u2192").Yellow()
 		text += Text(" NO DATA\n").Red().Plain()
 		return text

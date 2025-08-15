@@ -68,7 +68,6 @@
           "foreground": "#193549",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -93,8 +92,8 @@
             "always_enabled": true
           },
           "style": "plain",
-          "template": " {{ if gt .Code 0 }}\uf52f{{ else }}\uf4a7{{ end }} ",
-          "type": "exit"
+          "template": " {{ if gt .Code 0 }}\udb80\udc30{{ else }}\uf4a7{{ end }} ",
+          "type": "status"
         },
         {
           "foreground": "#ffffff",
@@ -142,5 +141,5 @@
   ],
   "console_title_template": "{{.UserName}}@{{.HostName}} : {{.Folder}}",
   "final_space": true,
-  "version": 2
+  "version": 3
 }

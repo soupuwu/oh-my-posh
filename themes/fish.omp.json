@@ -7,8 +7,8 @@
         {
           "foreground": "#ffffff",
           "style": "plain",
-          "template": " {{ .Meaning }}",
-          "type": "exit"
+          "template": " {{ reason .Code }}",
+          "type": "status"
         },
         {
           "foreground": "#100e23",
@@ -51,5 +51,5 @@
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

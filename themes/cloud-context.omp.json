@@ -1,16 +1,18 @@
 {
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
-  "version": 2,
+  "version": 3,
   "console_title_template": "{{ if or .Root .Segments.Git.RepoName }}[ {{ if .Root }}Admin{{ end }}{{ if and .Root .Segments.Git.RepoName }}@{{ end }}{{ if .Segments.Git.RepoName }}{{ .Segments.Git.RepoName }}{{ end }} ]{{ end }} {{ .Folder }}",
   "palette": {
     "background-color": "transparent",
     "cloud-text-amazon": "#4285F4",
     "cloud-text-azure": "#4285F4",
     "cloud-text-gcp": "#4285F4",
+    "cloud-text-firebase": "#FFA000",
     "error-background": "#dd0033",
     "error-text": "#242424",
     "git-text": "#238636",
     "kubernetes-text": "#FFBB00",
+    "talosctl-text": "#FF6C00",
     "symbol-color": "#ffffff",
     "timer-text": "#dd0033"
   },
@@ -40,6 +42,14 @@
         },
         {
           "background": "p:background-color",
+          "foreground": "p:talosctl-text",
+          "style": "powerline",
+          "powerline_symbol": "\ue0b4",
+          "template": "<p:symbol-color>\udb84\udcfe</> {{.Context}}",
+          "type": "talosctl"
+        },
+        {
+          "background": "p:background-color",
           "foreground": "p:cloud-text-amazon",
           "style": "powerline",
           "powerline_symbol": "\ue0b4",
@@ -54,7 +64,7 @@
           },
           "style": "powerline",
           "powerline_symbol": "\ue0b4",
-          "template": " <p:symbol-color>\ufd03</> {{ .Name }}",
+          "template": " <p:symbol-color>\uebd8</> {{ .Name }}",
           "type": "az"
         },
         {
@@ -65,7 +75,7 @@
           },
           "style": "powerline",
           "powerline_symbol": "\ue0b4",
-          "template": " <p:symbol-color>\ufd03</> (PS) {{ .Name }}",
+          "template": " <p:symbol-color>\uebd8</> (PS) {{ .Name }}",
           "type": "az"
         },
         {
@@ -75,6 +85,14 @@
           "powerline_symbol": "\ue0b4",
           "template": " <p:symbol-color>\ue7b2</> {{ .Project }}",
           "type": "gcp"
+        },
+        {
+          "background": "p:background-color",
+          "foreground": "p:cloud-text-firebase",
+          "style": "powerline",
+          "powerline_symbol": "\ue0b4",
+          "template": " <p:symbol-color>\udb82\udd67</> {{ .Project }}",
+          "type": "firebase"
         },
         {
           "background": "p:background-color",
@@ -105,7 +123,7 @@
           "style": "powerline",
           "powerline_symbol": "\ue0b4",
           "template": "{{ if eq .Code 0 }} \uf004 {{ end }}",
-          "type": "exit"
+          "type": "status"
         },
         {
           "background": "p:error-background",
@@ -113,8 +131,8 @@
           "leading_diamond": " \ue0c5",
           "trailing_diamond": "\ue0c4",
           "style": "diamond",
-          "template": "{{ if ne .Code 0 }} \uf00d {{ .Code }}{{ if (ne .Meaning (toString .Code)) }} - {{ .Meaning }}{{else}}{{ end }} {{ end }}",
-          "type": "exit"
+          "template": "{{ if ne .Code 0 }} \uf00d {{ .Code }}{{ if (ne (reason .Code) (toString .Code)) }} - {{ reason .Code }}{{else}}{{ end }} {{ end }}",
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -150,7 +168,6 @@
           "background": "p:background-color",
           "foreground": "p:git-text",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true
           },
           "style": "powerline",
@@ -167,7 +184,7 @@
       "segments": [
         {
           "background": "p:error-background",
-          "foreground": "p:backgrond-color",
+          "foreground": "p:background-color",
           "style": "diamond",
           "leading_diamond": "\ue0c7",
           "trailing_diamond": "\ue0c6",

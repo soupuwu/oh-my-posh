@@ -3,9 +3,10 @@ package segments
 import (
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -15,8 +16,9 @@ func TestOSInfo(t *testing.T) {
 		Case              string
 		ExpectedString    string
 		GOOS              string
-		IsWSL             bool
 		Platform          string
+		Icon              string
+		IsWSL             bool
 		DisplayDistroName bool
 	}{
 		{
@@ -62,23 +64,50 @@ func TestOSInfo(t *testing.T) {
 			ExpectedString: "unknown",
 			GOOS:           "unknown",
 		},
+		{
+			Case:           "crazy distro, specific icon",
+			ExpectedString: "crazy distro",
+			GOOS:           "linux",
+			Platform:       "crazy",
+			Icon:           "crazy distro",
+		},
+		{
+			Case:           "crazy distro, not mapped",
+			ExpectedString: "\uf17c",
+			GOOS:           "linux",
+			Platform:       "crazy",
+		},
+		{
+			Case:              "show distro name, mapped",
+			ExpectedString:    "<3",
+			DisplayDistroName: true,
+			GOOS:              "linux",
+			Icon:              "<3",
+			Platform:          "love",
+		},
 	}
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
+		env := new(mock.Environment)
 		env.On("GOOS").Return(tc.GOOS)
 		env.On("Platform").Return(tc.Platform)
-		env.On("TemplateCache").Return(&platform.TemplateCache{
-			Env: make(map[string]string),
-			WSL: tc.IsWSL,
-		})
-		osInfo := &Os{
-			env: env,
-			props: properties.Map{
-				DisplayDistroName: tc.DisplayDistroName,
-				Windows:           "windows",
-				MacOS:             "darwin",
-			},
+
+		props := properties.Map{
+			DisplayDistroName: tc.DisplayDistroName,
+			Windows:           "windows",
+			MacOS:             "darwin",
 		}
+
+		if len(tc.Icon) != 0 {
+			props[properties.Property(tc.Platform)] = tc.Icon
+		}
+
+		osInfo := &Os{}
+		osInfo.Init(props, env)
+
+		template.Cache = &cache.Template{
+			WSL: tc.IsWSL,
+		}
+
 		_ = osInfo.Enabled()
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, osInfo.Template(), osInfo), tc.Case)
 	}

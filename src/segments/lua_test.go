@@ -5,10 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,10 +13,10 @@ func TestLua(t *testing.T) {
 		Case           string
 		ExpectedString string
 		Version        string
-		HasLua         bool
-		HasLuaJit      bool
 		Prefer         string
 		ExpectedURL    string
+		HasLua         bool
+		HasLuaJit      bool
 	}{
 		{
 			Case:           "Lua 5.4.4 - Prefer Lua",
@@ -58,27 +54,31 @@ func TestLua(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		env := new(mock.MockedEnvironment)
-		env.On("HasCommand", "lua").Return(tc.HasLua)
-		env.On("RunCommand", "lua", []string{"-v"}).Return(tc.Version, nil)
+		params := &mockedLanguageParams{
+			cmd:           "lua",
+			versionParam:  "-v",
+			versionOutput: tc.Version,
+			extension:     "*.lua",
+		}
+		env, props := getMockedLanguageEnv(params)
+
+		if !tc.HasLua {
+			env.Unset("HasCommand")
+			env.On("HasCommand", "lua").Return(false)
+		}
+
 		env.On("HasCommand", "luajit").Return(tc.HasLuaJit)
 		env.On("RunCommand", "luajit", []string{"-v"}).Return(tc.Version, nil)
-		env.On("HasFiles", "*.lua").Return(true)
-		env.On("Pwd").Return("/usr/home/project")
-		env.On("Home").Return("/usr/home")
-		env.On("TemplateCache").Return(&platform.TemplateCache{
-			Env: make(map[string]string),
-		})
-		props := properties.Map{
-			properties.FetchVersion: true,
-		}
+
 		props[PreferredExecutable] = tc.Prefer
+
 		l := &Lua{}
 		l.Init(props, env)
+
 		failMsg := fmt.Sprintf("Failed in case: %s", tc.Case)
 		assert.True(t, l.Enabled(), failMsg)
 		assert.Equal(t, tc.ExpectedString, renderTemplate(env, l.Template(), l), failMsg)
-		assert.Equal(t, tc.ExpectedURL, l.version.URL, failMsg)
-		assert.Equal(t, strings.ToLower(strings.Split(tc.Case, " ")[0]), l.version.Executable, failMsg)
+		assert.Equal(t, tc.ExpectedURL, l.URL, failMsg)
+		assert.Equal(t, strings.ToLower(strings.Split(tc.Case, " ")[0]), l.Executable, failMsg)
 	}
 }

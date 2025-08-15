@@ -3,22 +3,23 @@ package segments
 import (
 	"path/filepath"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Whether to use kubectl or read kubeconfig ourselves
-const ParseKubeConfig properties.Property = "parse_kubeconfig"
+const (
+	ParseKubeConfig properties.Property = "parse_kubeconfig"
+	ContextAliases  properties.Property = "context_aliases"
+)
 
 type Kubectl struct {
-	props properties.Properties
-	env   platform.Environment
-
-	Context string
+	base
 
 	KubeContext
+	Context string
+	dirty   bool
 }
 
 type KubeConfig struct {
@@ -39,16 +40,13 @@ func (k *Kubectl) Template() string {
 	return " {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }} "
 }
 
-func (k *Kubectl) Init(props properties.Properties, env platform.Environment) {
-	k.props = props
-	k.env = env
-}
-
 func (k *Kubectl) Enabled() bool {
-	parseKubeConfig := k.props.GetBool(ParseKubeConfig, false)
+	parseKubeConfig := k.props.GetBool(ParseKubeConfig, true)
+
 	if parseKubeConfig {
 		return k.doParseKubeConfig()
 	}
+
 	return k.doCallKubectl()
 }
 
@@ -59,10 +57,12 @@ func (k *Kubectl) doParseKubeConfig() bool {
 	if len(kubeconfigs) == 0 {
 		kubeconfigs = []string{filepath.Join(k.env.Home(), ".kube/config")}
 	}
+
 	contexts := make(map[string]*KubeContext)
 	k.Context = ""
+
 	for _, kubeconfig := range kubeconfigs {
-		if len(kubeconfig) == 0 {
+		if kubeconfig == "" {
 			continue
 		}
 
@@ -80,7 +80,7 @@ func (k *Kubectl) doParseKubeConfig() bool {
 			}
 		}
 
-		if len(k.Context) == 0 {
+		if k.Context == "" {
 			k.Context = config.CurrentContext
 		}
 
@@ -88,9 +88,14 @@ func (k *Kubectl) doParseKubeConfig() bool {
 		if !exists {
 			continue
 		}
+
 		if context != nil {
 			k.KubeContext = *context
 		}
+
+		k.SetContextAlias()
+		k.dirty = true
+
 		return true
 	}
 
@@ -107,12 +112,14 @@ func (k *Kubectl) doCallKubectl() bool {
 	if !k.env.HasCommand(cmd) {
 		return false
 	}
+
 	result, err := k.env.RunCommand(cmd, "config", "view", "--output", "yaml", "--minify")
 	displayError := k.props.GetBool(properties.DisplayError, false)
 	if err != nil && displayError {
 		k.setError("KUBECTL ERR")
 		return true
 	}
+
 	if err != nil {
 		return false
 	}
@@ -122,18 +129,31 @@ func (k *Kubectl) doCallKubectl() bool {
 	if err != nil {
 		return false
 	}
+
 	k.Context = config.CurrentContext
+	k.SetContextAlias()
+	k.dirty = true
+
 	if len(config.Contexts) > 0 {
 		k.KubeContext = *config.Contexts[0].Context
 	}
+
 	return true
 }
 
 func (k *Kubectl) setError(message string) {
-	if len(k.Context) == 0 {
+	if k.Context == "" {
 		k.Context = message
 	}
+
 	k.Namespace = message
 	k.User = message
 	k.Cluster = message
+}
+
+func (k *Kubectl) SetContextAlias() {
+	aliases := k.props.GetKeyValueMap(ContextAliases, map[string]string{})
+	if alias, exists := aliases[k.Context]; exists {
+		k.Context = alias
+	}
 }

@@ -38,7 +38,6 @@
           "properties": {
             "branch_icon": "",
             "fetch_status": true,
-            "fetch_stash_count": true,
             "fetch_worktree_count": true
           },
           "style": "plain",
@@ -59,11 +58,11 @@
           },
           "style": "plain",
           "template": "{{ if gt .Code 0 }}<p:red>({{ .Code }}) </>{{ else }}<p:green>({{ .Code }}) </>{{ end }}> ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

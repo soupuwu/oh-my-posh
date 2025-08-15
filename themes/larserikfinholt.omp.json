@@ -37,8 +37,7 @@
           "foreground": "#193549",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "branch_max_length": 25,
-            "fetch_stash_count": true,
+            "branch_template": "{{ trunc 25 .Branch }}",
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -90,7 +89,7 @@
           "style": "diamond",
           "template": "<parentBackground>\ue0b0</> \ue23a ",
           "trailing_diamond": "\ue0b4",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -98,5 +97,5 @@
   ],
   "console_title_template": "{{ .Shell }} in {{ .Folder }}",
   "final_space": true,
-  "version": 2
+  "version": 3
 }

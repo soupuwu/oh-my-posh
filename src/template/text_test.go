@@ -3,23 +3,24 @@ package template
 import (
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/maps"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 )
 
 func TestRenderTemplate(t *testing.T) {
 	type Me struct {
 		Name string
 	}
+
 	cases := []struct {
+		Context     any
 		Case        string
 		Expected    string
 		Template    string
 		ShouldError bool
-		Context     interface{}
 	}{
 		{
 			Case:     "dot literal",
@@ -155,22 +156,18 @@ func TestRenderTemplate(t *testing.T) {
 		},
 	}
 
-	env := &mock.MockedEnvironment{}
-	env.On("TemplateCache").Return(&platform.TemplateCache{
-		Env: make(map[string]string),
-	})
-	env.On("Error", mock2.Anything)
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  tc.Context,
-			Env:      env,
-		}
-		text, err := tmpl.Render()
+		env := new(mock.Environment)
+		env.On("Shell").Return("foo")
+		Cache = new(cache.Template)
+		Init(env, nil, nil)
+
+		text, err := Render(tc.Template, tc.Context)
 		if tc.ShouldError {
 			assert.Error(t, err)
 			continue
 		}
+
 		assert.NoError(t, err)
 		assert.Equal(t, tc.Expected, text, tc.Case)
 	}
@@ -178,12 +175,12 @@ func TestRenderTemplate(t *testing.T) {
 
 func TestRenderTemplateEnvVar(t *testing.T) {
 	cases := []struct {
+		Context     any
+		Env         map[string]string
 		Case        string
 		Expected    string
 		Template    string
 		ShouldError bool
-		Env         map[string]string
-		Context     interface{}
 	}{
 		{
 			Case:        "nil struct with env var",
@@ -196,7 +193,7 @@ func TestRenderTemplateEnvVar(t *testing.T) {
 			Case:     "map with env var",
 			Expected: "hello world",
 			Template: "{{.Env.HELLO}} {{.World}}",
-			Context:  map[string]interface{}{"World": "world"},
+			Context:  map[string]any{"World": "world"},
 			Env:      map[string]string{"HELLO": "hello"},
 		},
 		{
@@ -207,8 +204,8 @@ func TestRenderTemplateEnvVar(t *testing.T) {
 			Env:      map[string]string{"HELLO": "hello"},
 		},
 		{Case: "no env var", Expected: "hello world", Template: "{{.Text}} world", Context: struct{ Text string }{Text: "hello"}},
-		{Case: "map", Expected: "hello world", Template: "{{.Text}} world", Context: map[string]interface{}{"Text": "hello"}},
-		{Case: "empty map", Expected: " world", Template: "{{.Text}} world", Context: map[string]string{}},
+		{Case: "map", Expected: "hello world", Template: "{{.Text}} world", Context: map[string]any{"Text": "hello"}},
+		{Case: "empty map", Expected: " world", Template: "{{.Text}} world", Context: map[string]string{}, ShouldError: true},
 		{
 			Case:     "Struct with duplicate property",
 			Expected: "posh",
@@ -227,39 +224,41 @@ func TestRenderTemplateEnvVar(t *testing.T) {
 			Case:     "Map with duplicate property",
 			Expected: "posh",
 			Template: "{{ .OS }}",
-			Context:  map[string]interface{}{"OS": "posh"},
+			Context:  map[string]any{"OS": "posh"},
 			Env:      map[string]string{"HELLO": "hello"},
 		},
 		{
 			Case:     "Non-supported map",
 			Expected: "darwin",
 			Template: "{{ .OS }}",
-			Context:  map[int]interface{}{},
+			Context:  map[int]any{},
 			Env:      map[string]string{"HELLO": "hello"},
 		},
 	}
 	for _, tc := range cases {
-		env := &mock.MockedEnvironment{}
-		env.On("TemplateCache").Return(&platform.TemplateCache{
-			Env: tc.Env,
-			OS:  "darwin",
-		})
-		env.On("Error", mock2.Anything)
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  tc.Context,
-			Env:      env,
+		env := &mock.Environment{}
+		env.On("Shell").Return("foo")
+
+		for k, v := range tc.Env {
+			env.On("Getenv", k).Return(v)
 		}
-		text, err := tmpl.Render()
+
+		Cache = &cache.Template{
+			OS: "darwin",
+		}
+		Init(env, nil, nil)
+
+		text, err := Render(tc.Template, tc.Context)
 		if tc.ShouldError {
 			assert.Error(t, err)
 			continue
 		}
+
 		assert.Equal(t, tc.Expected, text, tc.Case)
 	}
 }
 
-func TestCleanTemplate(t *testing.T) {
+func TestPatchTemplate(t *testing.T) {
 	cases := []struct {
 		Case     string
 		Expected string
@@ -282,27 +281,27 @@ func TestCleanTemplate(t *testing.T) {
 		},
 		{
 			Case:     "Same prefix",
-			Expected: "{{ .Env.HELLO }} {{ .Data.World }} {{ .Data.WorldTrend }}",
+			Expected: "{{ (call .Getenv \"HELLO\") }} {{ .Data.World }} {{ .Data.WorldTrend }}",
 			Template: "{{ .Env.HELLO }} {{ .World }} {{ .WorldTrend }}",
 		},
 		{
 			Case:     "Double use of property with different child",
-			Expected: "{{ .Env.HELLO }} {{ .Data.World.Trend }} {{ .Data.World.Hello }} {{ .Data.World }}",
+			Expected: "{{ (call .Getenv \"HELLO\") }} {{ .Data.World.Trend }} {{ .Data.World.Hello }} {{ .Data.World }}",
 			Template: "{{ .Env.HELLO }} {{ .World.Trend }} {{ .World.Hello }} {{ .World }}",
 		},
 		{
 			Case:     "Hello world",
-			Expected: "{{.Env.HELLO}} {{.Data.World}}",
+			Expected: "{{(call .Getenv \"HELLO\")}} {{.Data.World}}",
 			Template: "{{.Env.HELLO}} {{.World}}",
 		},
 		{
 			Case:     "Multiple vars",
-			Expected: "{{.Env.HELLO}} {{.Data.World}} {{.Data.World}}",
+			Expected: "{{(call .Getenv \"HELLO\")}} {{.Data.World}} {{.Data.World}}",
 			Template: "{{.Env.HELLO}} {{.World}} {{.World}}",
 		},
 		{
 			Case:     "Multiple vars with spaces",
-			Expected: "{{ .Env.HELLO }} {{ .Data.World }} {{ .Data.World }}",
+			Expected: "{{ (call .Getenv \"HELLO\") }} {{ .Data.World }} {{ .Data.World }}",
 			Template: "{{ .Env.HELLO }} {{ .World }} {{ .World }}",
 		},
 		{
@@ -320,15 +319,62 @@ func TestCleanTemplate(t *testing.T) {
 			Expected: "{{.Data.OS}}",
 			Template: "{{.OS}}",
 		},
+		{
+			Case:     "Keep .Contains intact for Segments",
+			Expected: `{{.Segments.Contains "Git"}}`,
+			Template: `{{.Segments.Contains "Git"}}`,
+		},
+		{
+			Case:     "Replace a direct call to .Segments with .Segments.List",
+			Expected: `{{(.Segments.MustGet "Git").Repo}}`,
+			Template: `{{.Segments.Git.Repo}}`,
+		},
 	}
+
+	env := new(mock.Environment)
+	env.On("Shell").Return("foo")
+	Cache = new(cache.Template)
+	Init(env, nil, nil)
+
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  map[string]interface{}{"OS": "posh"},
+		context := map[string]any{
+			"OS":         true,
+			"World":      true,
+			"WorldTrend": "chaos",
+			"Working":    true,
+			"Staging":    true,
+			"CPU":        true,
 		}
-		tmpl.cleanTemplate()
-		assert.Equal(t, tc.Expected, tmpl.Template, tc.Case)
+
+		tmpl := Text{
+			template: tc.Template,
+			context:  context,
+		}
+
+		tmpl.patchTemplate()
+		assert.Equal(t, tc.Expected, tmpl.template, tc.Case)
 	}
+}
+
+type Foo struct{}
+
+func (f *Foo) Hello() string {
+	return "hello"
+}
+
+func TestPatchTemplateStruct(t *testing.T) {
+	env := new(mock.Environment)
+	env.On("Shell").Return("foo")
+	Cache = new(cache.Template)
+	Init(env, nil, nil)
+
+	tmpl := Text{
+		template: "{{ .Hello }}",
+		context:  Foo{},
+	}
+
+	tmpl.patchTemplate()
+	assert.Equal(t, "{{ .Data.Hello }}", tmpl.template)
 }
 
 func TestSegmentContains(t *testing.T) {
@@ -341,20 +387,18 @@ func TestSegmentContains(t *testing.T) {
 		{Case: "match", Expected: "world", Template: `{{ if .Segments.Contains "Path" }}hello{{ else }}world{{ end }}`},
 	}
 
-	env := &mock.MockedEnvironment{}
-	env.On("TemplateCache").Return(&platform.TemplateCache{
-		Env: make(map[string]string),
-		Segments: map[string]interface{}{
-			"Git": nil,
-		},
-	})
+	env := &mock.Environment{}
+	segments := maps.NewConcurrent[any]()
+	segments.Set("Git", "foo")
+	env.On("Shell").Return("foo")
+
+	Cache = &cache.Template{
+		Segments: segments,
+	}
+	Init(env, nil, nil)
+
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  nil,
-			Env:      env,
-		}
-		text, _ := tmpl.Render()
+		text, _ := Render(tc.Template, nil)
 		assert.Equal(t, tc.Expected, text, tc.Case)
 	}
 }

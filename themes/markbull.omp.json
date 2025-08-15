@@ -52,13 +52,12 @@
           "foreground": "#100e23",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "azure_devops_icon": "\ufd03 ",
+            "azure_devops_icon": "\uebd8 ",
             "bitbucket_icon": "\uf171 ",
             "branch_gone_icon": "\uebcc ",
             "branch_icon": "\ue0a0 ",
             "branch_identical_icon": "\uf4c4 ",
             "commit_icon": "\uf417 ",
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true,
             "fetch_worktree_count": true,
@@ -87,8 +86,8 @@
           "foreground": "#fffef9",
           "powerline_symbol": "\ue0b0",
           "style": "powerline",
-          "template": " \uf12a >>{{ .Meaning }} ",
-          "type": "exit"
+          "template": " \uf12a >>{{ reason .Code }} ",
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -115,5 +114,5 @@
   ],
   "console_title_template": "{{if .Root}}\u26a1 {{end}}{{.Folder}}",
   "final_space": true,
-  "version": 2
+  "version": 3
 }

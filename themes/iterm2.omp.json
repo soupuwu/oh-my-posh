@@ -46,7 +46,6 @@
           "foreground": "#193549",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true
           },
           "style": "powerline",
@@ -65,7 +64,7 @@
           },
           "style": "powerline",
           "template": " \uea6c ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -139,5 +138,5 @@
     "foreground": "#FFD700",
     "template": "{{if .Root}}\u26a1 {{end}}🚀 "
   },
-  "version": 2
+  "version": 3
 }

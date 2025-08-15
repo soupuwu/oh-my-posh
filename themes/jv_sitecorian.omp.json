@@ -46,7 +46,6 @@
           "foreground": "#ffffff",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -72,7 +71,7 @@
           },
           "style": "powerline",
           "template": " {{ if gt .Code 0 }}\uf421{{ else }}\uf469 \u2665{{ end }} ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -162,5 +161,5 @@
   ],
   "console_title_template": "{{if .Root}}Admin: {{end}} {{.Folder}}",
   "final_space": true,
-  "version": 2
+  "version": 3
 }

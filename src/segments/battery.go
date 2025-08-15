@@ -1,18 +1,15 @@
 package segments
 
 import (
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform/battery"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/battery"
 )
 
 type Battery struct {
-	props properties.Properties
-	env   platform.Environment
-
-	*battery.Info
+	base
 	Error string
 	Icon  string
+	battery.Info
 }
 
 const (
@@ -36,19 +33,20 @@ func (b *Battery) Enabled() bool {
 		return false
 	}
 
-	var err error
-	b.Info, err = b.env.BatteryState()
+	info, err := b.env.BatteryState()
 
 	if !b.enabledWhileError(err) {
 		return false
 	}
 
+	b.Info = *info
+
 	// case on computer without batteries(no error, empty array)
-	if err == nil && b.Info == nil {
+	if err == nil && b.Percentage == 0 {
 		return false
 	}
 
-	switch b.Info.State {
+	switch b.State {
 	case battery.Discharging:
 		b.Icon = b.props.GetString(DischargingIcon, "")
 	case battery.NotCharging:
@@ -82,9 +80,4 @@ func (b *Battery) enabledWhileError(err error) bool {
 	b.Percentage = 100
 	b.State = battery.Full
 	return true
-}
-
-func (b *Battery) Init(props properties.Properties, env platform.Environment) {
-	b.props = props
-	b.env = env
 }

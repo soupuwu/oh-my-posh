@@ -1,19 +1,19 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/engine"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
+	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 
 	"github.com/spf13/cobra"
 )
 
-var (
-	output string
-)
+var output string
 
 // exportCmd represents the export command
 var exportCmd = &cobra.Command{
@@ -25,51 +25,81 @@ You can choose to print the output to stdout, or export your config in the forma
 
 Example usage:
 
-> oh-my-posh config export --config ~/myconfig.omp.json
-
-Exports the ~/myconfig.omp.json config file and prints the result to stdout.
-
 > oh-my-posh config export --config ~/myconfig.omp.json --format toml
 
-Exports the ~/myconfig.omp.json config file to toml and prints the result to stdout.`,
+Exports the config file "~/myconfig.omp.json" in TOML format and prints the result to stdout.
+
+> oh-my-posh config export --output ~/new_config.omp.json
+
+Exports the current config to "~/new_config.omp.json" (in JSON format).`,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		env := &platform.Shell{
-			CmdFlags: &platform.Flags{
-				Config:  config,
-				Version: cliVersion,
-			},
+	Run: func(_ *cobra.Command, _ []string) {
+		if output == "" && format == "" {
+			// usage error
+			fmt.Println("neither output path nor export format is specified")
+			exitcode = 2
+			return
 		}
-		env.Init()
-		defer env.Close()
-		cfg := engine.LoadConfig(env)
-		if len(output) == 0 {
+
+		cfg, _ := config.Load(configFlag, shell.GENERIC, false)
+
+		validateExportFormat := func() error {
+			format = strings.ToLower(format)
+			switch format {
+			case "json", "jsonc":
+				format = config.JSON
+			case "toml", "tml":
+				format = config.TOML
+			case "yaml", "yml":
+				format = config.YAML
+			default:
+				formats := []string{"json", "jsonc", "toml", "tml", "yaml", "yml"}
+				// usage error
+				fmt.Printf("export format must be one of these: %s\n", strings.Join(formats, ", "))
+				exitcode = 2
+				return errors.New("invalide export format")
+			}
+
+			return nil
+		}
+
+		if len(format) != 0 {
+			if err := validateExportFormat(); err != nil {
+				return
+			}
+		}
+
+		if output == "" {
 			fmt.Print(cfg.Export(format))
 			return
 		}
-		cfg.Output = cleanOutputPath(output, env)
-		format := strings.TrimPrefix(filepath.Ext(output), ".")
-		if format == "yml" {
-			format = engine.YAML
+
+		cfg.Source = cleanOutputPath(output)
+
+		if format == "" {
+			format = strings.TrimPrefix(filepath.Ext(output), ".")
+			if err := validateExportFormat(); err != nil {
+				return
+			}
 		}
+
 		cfg.Write(format)
 	},
 }
 
-func cleanOutputPath(path string, env platform.Environment) string {
-	if strings.HasPrefix(path, "~") {
-		path = strings.TrimPrefix(path, "~")
-		path = filepath.Join(env.Home(), path)
-	}
-	if !filepath.IsAbs(path) {
-		if absPath, err := filepath.Abs(path); err == nil {
-			path = absPath
+func cleanOutputPath(output string) string {
+	output = path.ReplaceTildePrefixWithHomeDir(output)
+
+	if !filepath.IsAbs(output) {
+		if absPath, err := filepath.Abs(output); err == nil {
+			output = absPath
 		}
 	}
-	return filepath.Clean(path)
+
+	return filepath.Clean(output)
 }
 
-func init() { //nolint:gochecknoinits
+func init() {
 	exportCmd.Flags().StringVarP(&format, "format", "f", "json", "config format to migrate to")
 	exportCmd.Flags().StringVarP(&output, "output", "o", "", "config file to export to")
 	configCmd.AddCommand(exportCmd)

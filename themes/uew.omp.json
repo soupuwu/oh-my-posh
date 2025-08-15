@@ -19,7 +19,6 @@
             "foreground": "#BFA8BF",
             "properties": {
               "branch_icon": "\ue725 ",
-              "fetch_stash_count": true,
               "fetch_status": true,
               "fetch_upstream_icon": true,
               "fetch_worktree_count": true
@@ -109,7 +108,7 @@
             },
             "style": "plain",
             "template": " \u007E ",
-            "type": "exit"
+            "type": "status"
           }
         ],
         "type": "prompt"
@@ -121,5 +120,5 @@
       "foreground": "#FEF5ED",
       "template": "\ue285 "
     },
-    "version": 2
+    "version": 3
   }

@@ -35,7 +35,6 @@
           "foreground": "#000000",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -55,7 +54,7 @@
           "style": "diamond",
           "template": "  ",
           "trailing_diamond": "\ue0b4",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -105,5 +104,5 @@
     }
   ],
   "console_title_template": "{{ .Folder }}",
-  "version": 2
+  "version": 3
 }

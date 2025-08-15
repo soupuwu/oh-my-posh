@@ -100,11 +100,11 @@
           },
           "style": "powerline",
           "template": "\u279c ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

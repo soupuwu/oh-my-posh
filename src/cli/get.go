@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/ansi"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/google/uuid"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/color"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 
 	color2 "github.com/gookit/color"
 	"github.com/spf13/cobra"
@@ -14,7 +16,7 @@ import (
 
 // getCmd represents the get command
 var getCmd = &cobra.Command{
-	Use:   "get [shell|millis|accent|toggles|width]",
+	Use:   "get [shell|millis|accent|toggles|width|uuid]",
 	Short: "Get a value from oh-my-posh",
 	Long: `Get a value from oh-my-posh.
 
@@ -24,13 +26,15 @@ This command is used to get the value of the following variables:
 - millis
 - accent
 - toggles
-- width`,
+- width
+- uuid`,
 	ValidArgs: []string{
 		"millis",
 		"shell",
 		"accent",
 		"toggles",
 		"width",
+		"uuid",
 	},
 	Args: NoArgsOrOneValidArg,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -44,37 +48,38 @@ This command is used to get the value of the following variables:
 			return
 		}
 
-		env := &platform.Shell{
-			CmdFlags: &platform.Flags{
-				Shell:   shellName,
-				Version: cliVersion,
-			},
+		flags := &runtime.Flags{
+			Shell: shellName,
 		}
-		env.Init()
+
+		env := &runtime.Terminal{}
+		env.Init(flags)
 		defer env.Close()
 
 		switch args[0] {
 		case "shell":
-			fmt.Println(env.Shell())
+			fmt.Print(env.Shell())
 		case "accent":
-			rgb, err := ansi.GetAccentColor(env)
+			rgb, err := color.GetAccentColor(env)
 			if err != nil {
 				fmt.Println("error getting accent color:", err.Error())
 				return
 			}
 			accent := color2.RGB(rgb.R, rgb.G, rgb.B)
-			fmt.Println("#" + accent.Hex())
+			fmt.Print("#" + accent.Hex())
 		case "toggles":
-			cache := env.Cache()
-			togglesCache, _ := cache.Get(platform.TOGGLECACHE)
 			var toggles []string
+
+			togglesCache, _ := env.Session().Get(cache.TOGGLECACHE)
 			if len(togglesCache) != 0 {
 				toggles = strings.Split(togglesCache, ",")
 			}
+
 			if len(toggles) == 0 {
 				fmt.Println("No segments are toggled off")
 				return
 			}
+
 			fmt.Println("Toggled off segments:")
 			for _, toggle := range toggles {
 				fmt.Println("- " + toggle)
@@ -85,14 +90,17 @@ This command is used to get the value of the following variables:
 				fmt.Println("error getting terminal width:", err.Error())
 				return
 			}
-			fmt.Println(width)
+
+			fmt.Print(width)
+		case "uuid":
+			fmt.Print(uuid.NewString())
 		default:
 			_ = cmd.Help()
 		}
 	},
 }
 
-func init() { //nolint:gochecknoinits
+func init() {
 	RootCmd.AddCommand(getCmd)
 	getCmd.Flags().StringVar(&shellName, "shell", "", "the shell to print for")
 }

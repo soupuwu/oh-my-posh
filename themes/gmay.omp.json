@@ -46,7 +46,6 @@
           "foreground": "#193549",
           "powerline_symbol": "\ue0b0",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_upstream_icon": true
           },
           "style": "powerline",
@@ -82,7 +81,7 @@
           "style": "diamond",
           "template": " \ueb05 ",
           "trailing_diamond": "\ue0b4",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -102,5 +101,5 @@
     }
   ],
   "final_space": true,
-  "version": 2
+  "version": 3
 }

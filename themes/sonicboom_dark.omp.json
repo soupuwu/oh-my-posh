@@ -41,7 +41,7 @@
           "foreground": "#43CCEA",
           "properties": {
             "folder_icon": "\ue5fe",
-            "folder_separator_icon": "<transparent> \ue0bd </>",
+            "folder_separator_icon": " <#000000>\ue0bd </>",
             "home_icon": "\ueb06",
             "style": "agnoster_short"
           },
@@ -53,7 +53,6 @@
           "background": "#272727",
           "foreground": "#00ff0d",
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true
           },
           "style": "plain",
@@ -114,12 +113,12 @@
           },
           "style": "plain",
           "template": "\uf432 ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
   "final_space": true,
-  "version": 2
+  "version": 3
 }

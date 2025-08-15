@@ -64,7 +64,7 @@
           "foreground": "red",
           "style": "plain",
           "template": " C:{{ if gt .Code 0 }}{{ .Code }}{{ end }} ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -84,5 +84,5 @@
     }
   ],
   "final_space": true,
-  "version": 2
+  "version": 3
 }

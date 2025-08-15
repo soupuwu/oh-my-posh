@@ -1,306 +1,232 @@
 package shell
 
 import (
-	_ "embed"
-	"path/filepath"
-	"strconv"
-
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
-	"github.com/jandedobbeleer/oh-my-posh/src/template"
-	"github.com/jandedobbeleer/oh-my-posh/src/upgrade"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
-
-//go:embed scripts/omp.ps1
-var pwshInit string
-
-//go:embed scripts/omp.fish
-var fishInit string
-
-//go:embed scripts/omp.bash
-var bashInit string
-
-//go:embed scripts/omp.zsh
-var zshInit string
-
-//go:embed scripts/omp.lua
-var cmdInit string
-
-//go:embed scripts/omp.nu
-var nuInit string
-
-//go:embed scripts/omp.tcsh
-var tcshInit string
-
-//go:embed scripts/omp.elv
-var elvishInit string
-
-//go:embed scripts/omp.py
-var xonshInit string
 
 const (
 	noExe = "echo \"Unable to find Oh My Posh executable\""
 )
 
 var (
-	Transient        bool
-	ErrorLine        bool
-	Tooltips         bool
-	ShellIntegration bool
-	RPrompt          bool
-	Cursor           bool
+	// identify ble.sh by validating the existence of BLE_SESSION_ID
+	bashBLEsession bool
 )
 
-func getExecutablePath(env platform.Environment) (string, error) {
+func getExecutablePath(env runtime.Environment) (string, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
+
 	if env.Flags().Strict {
-		return platform.Base(env, executable), nil
+		return path.Base(executable), nil
 	}
+
 	// On Windows, it fails when the excutable is called in MSYS2 for example
 	// which uses unix style paths to resolve the executable's location.
 	// PowerShell knows how to resolve both, so we can swap this without any issue.
-	if env.GOOS() == platform.WINDOWS {
+	if env.GOOS() == runtime.WINDOWS {
 		executable = strings.ReplaceAll(executable, "\\", "/")
 	}
+
 	return executable, nil
 }
 
-func quotePwshStr(str string) string {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(str, "'", "''"))
-}
-
-func quotePosixStr(str string) string {
-	if len(str) == 0 {
-		return "''"
-	}
-	needQuoting := false
-	var b strings.Builder
-	for _, r := range str {
-		normal := false
-		switch r {
-		case '!', ';', '"', '(', ')', '[', ']', '{', '}', '$', '|', '&', '>', '<', '`', ' ', '#', '~', '*', '?', '=':
-			b.WriteRune(r)
-		case '\\', '\'':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		case '\a':
-			b.WriteString(`\a`)
-		case '\b':
-			b.WriteString(`\b`)
-		case '\f':
-			b.WriteString(`\f`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\v':
-			b.WriteString(`\v`)
-		default:
-			b.WriteRune(r)
-			normal = true
-		}
-		if !normal {
-			needQuoting = true
-		}
-	}
-	// the quoting form $'...' is used for a string contains any special characters
-	if needQuoting {
-		return fmt.Sprintf("$'%s'", b.String())
-	}
-	return b.String()
-}
-
-func quoteFishStr(str string) string {
-	if len(str) == 0 {
-		return "''"
-	}
-	needQuoting := false
-	var b strings.Builder
-	for _, r := range str {
-		normal := false
-		switch r {
-		case ';', '"', '(', ')', '[', ']', '{', '}', '$', '|', '&', '>', '<', ' ', '#', '~', '*', '?', '=':
-			b.WriteRune(r)
-		case '\\', '\'':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		default:
-			b.WriteRune(r)
-			normal = true
-		}
-		if !normal {
-			needQuoting = true
-		}
-	}
-	// single quotes are used when the string contains any special characters
-	if needQuoting {
-		return fmt.Sprintf("'%s'", b.String())
-	}
-	return b.String()
-}
-
-func quoteLuaStr(str string) string {
-	if len(str) == 0 {
-		return "''"
-	}
-	return fmt.Sprintf("'%s'", strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(str))
-}
-
-func quoteNuStr(str string) string {
-	if len(str) == 0 {
-		return "''"
-	}
-	return fmt.Sprintf(`"%s"`, strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(str))
-}
-
-func Init(env platform.Environment) string {
+func Init(env runtime.Environment, feats Features) string {
 	shell := env.Flags().Shell
+
 	switch shell {
-	case PWSH, PWSH5, ELVISH:
+	case ELVISH, PWSH, PWSH5:
+		if shell != ELVISH && !env.Flags().Eval {
+			return PrintInit(env, feats, nil)
+		}
+
 		executable, err := getExecutablePath(env)
 		if err != nil {
 			return noExe
 		}
+
 		var additionalParams string
 		if env.Flags().Strict {
 			additionalParams += " --strict"
 		}
-		if env.Flags().Manual {
-			additionalParams += " --manual"
-		}
-		var command, config string
+
+		config := quotePwshOrElvishStr(env.Flags().Config)
+		executable = quotePwshOrElvishStr(executable)
+
+		var command string
+
 		switch shell {
 		case PWSH, PWSH5:
-			command = "(@(& %s init %s --config=%s --print%s) -join \"`n\") | Invoke-Expression"
-			config = quotePwshStr(env.Flags().Config)
-			executable = quotePwshStr(executable)
+			command = "(@(& %s init %s --config=%s --print --eval%s) -join \"`n\") | Invoke-Expression"
 		case ELVISH:
-			command = "eval (%s init %s --config=%s --print%s | slurp)"
-			config = env.Flags().Config
+			command = "eval ((external %s) init %s --config=%s --print%s | slurp)"
 		}
+
 		return fmt.Sprintf(command, executable, shell, config, additionalParams)
-	case ZSH, BASH, FISH, CMD, TCSH, XONSH:
-		return PrintInit(env)
-	case NU:
-		createNuInit(env)
-		return ""
+	case ZSH, BASH, FISH, CMD, XONSH, NU:
+		return PrintInit(env, feats, nil)
 	default:
-		return fmt.Sprintf("echo \"No initialization script available for %s\"", shell)
+		return fmt.Sprintf(`echo "%s is not supported by Oh My Posh"`, shell)
 	}
 }
 
-func PrintInit(env platform.Environment) string {
+func PrintInit(env runtime.Environment, features Features, startTime *time.Time) string {
+	shell := env.Flags().Shell
+	async := features&Async != 0
+
+	if scriptPath, OK := hasScript(env); OK {
+		return sourceInit(env, shell, scriptPath, async)
+	}
+
 	executable, err := getExecutablePath(env)
 	if err != nil {
 		return noExe
 	}
 
-	toggleSetting := func(setting bool) string {
-		if env.Flags().Manual {
-			return "false"
-		}
-		return strconv.FormatBool(setting)
-	}
-
-	shell := env.Flags().Shell
 	configFile := env.Flags().Config
+	bashBLEsession = len(env.Getenv("BLE_SESSION_ID")) != 0
 
-	var (
-		script, notice string
-		hasNotice      bool
-	)
+	var script string
 
 	switch shell {
 	case PWSH, PWSH5:
-		executable = quotePwshStr(executable)
-		configFile = quotePwshStr(configFile)
+		executable = quotePwshOrElvishStr(executable)
+		configFile = quotePwshOrElvishStr(configFile)
 		script = pwshInit
 	case ZSH:
-		executable = quotePosixStr(executable)
-		configFile = quotePosixStr(configFile)
+		executable = QuotePosixStr(executable)
+		configFile = QuotePosixStr(configFile)
 		script = zshInit
 	case BASH:
-		executable = quotePosixStr(executable)
-		configFile = quotePosixStr(configFile)
+		executable = QuotePosixStr(executable)
+		configFile = QuotePosixStr(configFile)
 		script = bashInit
 	case FISH:
 		executable = quoteFishStr(executable)
 		configFile = quoteFishStr(configFile)
 		script = fishInit
 	case CMD:
-		executable = quoteLuaStr(executable)
-		configFile = quoteLuaStr(configFile)
+		executable = escapeLuaStr(executable)
+		configFile = escapeLuaStr(configFile)
 		script = cmdInit
 	case NU:
 		executable = quoteNuStr(executable)
 		configFile = quoteNuStr(configFile)
 		script = nuInit
-	case TCSH:
-		executable = quotePosixStr(executable)
-		configFile = quotePosixStr(configFile)
-		script = tcshInit
 	case ELVISH:
+		executable = quotePwshOrElvishStr(executable)
+		configFile = quotePwshOrElvishStr(configFile)
 		script = elvishInit
 	case XONSH:
+		executable = quotePythonStr(executable)
+		configFile = quotePythonStr(configFile)
 		script = xonshInit
 	default:
 		return fmt.Sprintf("echo \"No initialization script available for %s\"", shell)
 	}
 
-	// only run this for shells that support
-	// injecting the notice directly
-	if shell != PWSH && shell != PWSH5 {
-		notice, hasNotice = upgrade.Notice(env)
-	}
-
-	return strings.NewReplacer(
+	init := strings.NewReplacer(
 		"::OMP::", executable,
 		"::CONFIG::", configFile,
 		"::SHELL::", shell,
-		"::TRANSIENT::", toggleSetting(Transient),
-		"::ERROR_LINE::", toggleSetting(ErrorLine),
-		"::TOOLTIPS::", toggleSetting(Tooltips),
-		"::FTCS_MARKS::", toggleSetting(ShellIntegration),
-		"::RPROMPT::", strconv.FormatBool(RPrompt),
-		"::CURSOR::", strconv.FormatBool(Cursor),
-		"::UPGRADE::", strconv.FormatBool(hasNotice),
-		"::UPGRADENOTICE::", notice,
 	).Replace(script)
+
+	shellScript := features.Lines(shell).String(init)
+
+	if env.Flags().Eval {
+		return shellScript
+	}
+
+	log.Debug(shellScript)
+
+	scriptPath, err := writeScript(env, shellScript)
+	if err != nil {
+		return fmt.Sprintf("echo \"Failed to write init script: %s\"", err.Error())
+	}
+
+	sourceCommand := sourceInit(env, shell, scriptPath, async)
+
+	if !env.Flags().Debug {
+		return sourceCommand
+	}
+
+	if len(sourceCommand) != 0 {
+		log.Debug("init source command:", sourceCommand)
+	}
+
+	return printDebug(env, startTime)
 }
 
-func createNuInit(env platform.Environment) {
-	initPath := filepath.Join(env.Home(), ".oh-my-posh.nu")
-	f, err := os.OpenFile(initPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return
-	}
-	_, err = f.WriteString(PrintInit(env))
-	if err != nil {
-		return
-	}
-	_ = f.Close()
+func printDebug(env runtime.Environment, startTime *time.Time) string {
+	builder := text.NewBuilder()
+
+	builder.WriteString(fmt.Sprintf("\n%s %s\n", log.Text("Init duration:").Green().Bold().Plain(), time.Since(*startTime)))
+
+	builder.WriteString(log.Text("\n\nLogs:\n\n").Green().Bold().Plain().String())
+	builder.WriteString(env.Logs())
+
+	return builder.String()
 }
 
-func ConsoleBackgroundColor(env platform.Environment, backgroundColorTemplate string) string {
-	if len(backgroundColorTemplate) == 0 {
-		return backgroundColorTemplate
+func sourceInit(env runtime.Environment, shell, scriptPath string, async bool) string {
+	// nushell stores to autoload, no need to return anything
+	if shell == NU {
+		return ""
 	}
-	tmpl := &template.Text{
-		Template: backgroundColorTemplate,
-		Context:  nil,
-		Env:      env,
+
+	if env.IsCygwin() {
+		var err error
+		scriptPath, err = env.RunCommand("cygpath", "-u", scriptPath)
+		if err != nil {
+			log.Error(err)
+			return fmt.Sprintf("echo \"Failed to convert Cygwin path due to %s\"", err.Error())
+		}
 	}
-	text, err := tmpl.Render()
-	if err != nil {
-		return err.Error()
+
+	if async {
+		return sourceInitAsync(shell, scriptPath)
 	}
-	return text
+
+	switch shell {
+	case PWSH, PWSH5:
+		return fmt.Sprintf("& %s", quotePwshOrElvishStr(scriptPath))
+	case ZSH, BASH:
+		return fmt.Sprintf("source %s", QuotePosixStr(scriptPath))
+	case XONSH:
+		return fmt.Sprintf("source %s", quotePythonStr(scriptPath))
+	case FISH:
+		return fmt.Sprintf("source %s", quoteFishStr(scriptPath))
+	case ELVISH:
+		return fmt.Sprintf("eval (slurp < %s)", quotePwshOrElvishStr(scriptPath))
+	case CMD:
+		return fmt.Sprintf(`load(io.open('%s', "r"):read("*a"))()`, escapeLuaStr(scriptPath))
+	default:
+		return fmt.Sprintf("echo \"No source command available for %s\"", shell)
+	}
+}
+
+func sourceInitAsync(shell, scriptPath string) string {
+	switch shell {
+	case PWSH, PWSH5:
+		return fmt.Sprintf("function prompt() { & %s }", quotePwshOrElvishStr(scriptPath))
+	case ZSH:
+		return fmt.Sprintf("precmd() { source %s }", QuotePosixStr(scriptPath))
+	case BASH:
+		command := fmt.Sprintf("source %s", QuotePosixStr(scriptPath))
+		return fmt.Sprintf("PROMPT_COMMAND=%s", QuotePosixStr(command))
+	case FISH:
+		return fmt.Sprintf("function fish_prompt; source %s; end", quoteFishStr(scriptPath))
+	default:
+		return ""
+	}
 }

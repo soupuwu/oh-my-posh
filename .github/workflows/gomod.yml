@@ -2,6 +2,10 @@ name: Go Mod
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go-mod:
     runs-on: ubuntu-latest
@@ -9,12 +13,10 @@ jobs:
       run:
         working-directory: ${{ github.workspace }}/src
     steps:
-    - name: Install Go
-      uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753
-      with:
-        go-version: 1.20.2
     - name: Checkout code
-      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+    - name: Install Go 🗳
+      uses: ./.github/workflows/composite/bootstrap-go
     - name: Check for unused dependencies
       run: |
         go mod tidy

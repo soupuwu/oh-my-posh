@@ -3,20 +3,22 @@ package cli
 import (
 	"fmt"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/ansi"
-	"github.com/jandedobbeleer/oh-my-posh/src/engine"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	"github.com/jandedobbeleer/oh-my-posh/src/cli/image"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/prompt"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
+	"github.com/jandedobbeleer/oh-my-posh/src/template"
+	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	author        string
-	cursorPadding int
-	rPromptOffset int
-	bgColor       string
-	outputImage   string
+	author            string
+	colorSettingsFile string
+	bgColor           string
+	outputImage       string
 )
 
 // imageCmd represents the image command
@@ -27,10 +29,9 @@ var imageCmd = &cobra.Command{
 
 You can tweak the output by using additional flags:
 
-- author: displays the author below the prompt
 - cursor-padding: the padding of the prompt cursor
 - rprompt-offset: the offset of the right prompt
-- background-color: the background color of the image
+- settings: JSON file with overrides
 
 Example usage:
 
@@ -42,55 +43,71 @@ Exports the config to an image file called myconfig.png in the current working d
 
 Exports the config to an image file ~/mytheme.png.
 
-> oh-my-posh config export image --config ~/myconfig.omp.json --author "John Doe"
+> oh-my-posh config export image --config ~/myconfig.omp.json --settings ~/.image.settings.json
 
-Exports the config to an image file using customized output options.`,
+Exports the config to an image file using customized output settings.`,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		env := &platform.Shell{
-			CmdFlags: &platform.Flags{
-				Config:  config,
-				Shell:   shell.GENERIC,
-				Version: cliVersion,
-			},
-		}
-		env.Init()
-		defer env.Close()
-		cfg := engine.LoadConfig(env)
+	Run: func(_ *cobra.Command, _ []string) {
+		cfg, _ := config.Load(configFlag, shell.GENERIC, false)
 
-		// set dsane defaults for things we don't print
+		flags := &runtime.Flags{
+			Config:        cfg.Source,
+			Shell:         shell.GENERIC,
+			TerminalWidth: 120,
+		}
+
+		env := &runtime.Terminal{}
+		env.Init(flags)
+
+		template.Init(env, cfg.Var, cfg.Maps)
+
+		defer func() {
+			template.SaveCache()
+			env.Close()
+		}()
+
+		// set sane defaults for things we don't print
 		cfg.ConsoleTitleTemplate = ""
 		cfg.PWD = ""
 
-		writerColors := cfg.MakeColors()
-		writer := &ansi.Writer{
-			TerminalBackground: shell.ConsoleBackgroundColor(env, cfg.TerminalBackground),
-			AnsiColors:         writerColors,
-			TrueColor:          env.CmdFlags.TrueColor,
-		}
-		writer.Init(shell.GENERIC)
-		eng := &engine.Engine{
+		terminal.Init(shell.GENERIC)
+		terminal.BackgroundColor = cfg.TerminalBackground.ResolveTemplate()
+		terminal.Colors = cfg.MakeColors(env)
+
+		eng := &prompt.Engine{
 			Config: cfg,
 			Env:    env,
-			Writer: writer,
 		}
 
-		prompt := eng.Primary()
+		settings, err := image.LoadSettings(colorSettingsFile)
+		if err != nil {
+			settings = &image.Settings{
+				Colors:          image.NewColors(),
+				Author:          author,
+				BackgroundColor: bgColor,
+			}
+		}
 
-		imageCreator := &engine.ImageRenderer{
-			AnsiString:    prompt,
-			Author:        author,
-			CursorPadding: cursorPadding,
-			RPromptOffset: rPromptOffset,
-			BgColor:       bgColor,
-			Ansi:          writer,
+		if settings.Colors == nil {
+			settings.Colors = image.NewColors()
+		}
+
+		if settings.Cursor == "" {
+			settings.Cursor = "_"
+		}
+
+		primaryPrompt := eng.Primary()
+
+		imageCreator := &image.Renderer{
+			AnsiString: primaryPrompt,
+			Settings:   *settings,
 		}
 
 		if outputImage != "" {
-			imageCreator.Path = cleanOutputPath(outputImage, env)
+			imageCreator.Path = cleanOutputPath(outputImage)
 		}
 
-		err := imageCreator.Init(env)
+		err = imageCreator.Init(env)
 		if err != nil {
 			fmt.Print(err.Error())
 			return
@@ -103,11 +120,15 @@ Exports the config to an image file using customized output options.`,
 	},
 }
 
-func init() { //nolint:gochecknoinits
+func init() {
 	imageCmd.Flags().StringVar(&author, "author", "", "config author")
 	imageCmd.Flags().StringVar(&bgColor, "background-color", "", "image background color")
-	imageCmd.Flags().IntVar(&cursorPadding, "cursor-padding", 0, "prompt cursor padding")
-	imageCmd.Flags().IntVar(&rPromptOffset, "rprompt-offset", 0, "right prompt offset")
 	imageCmd.Flags().StringVarP(&outputImage, "output", "o", "", "image file (.png) to export to")
+	imageCmd.Flags().StringVar(&colorSettingsFile, "settings", "", "color settings file to override ANSI color codes and metadata")
+
+	// deprecated flags
+	_ = imageCmd.Flags().MarkHidden("author")
+	_ = imageCmd.Flags().MarkHidden("background-color")
+
 	exportCmd.AddCommand(imageCmd)
 }

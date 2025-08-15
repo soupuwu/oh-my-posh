@@ -65,7 +65,6 @@
             "{{ if gt .Behind 0 }}#8A4FFF{{ end }}"
           ],
           "properties": {
-            "fetch_stash_count": true,
             "fetch_status": true,
             "fetch_upstream_icon": true
           },
@@ -170,7 +169,7 @@
           },
           "style": "plain",
           "template": " \uea9f {{ if gt .Code 0 }}{{ .Code }}{{ end }} ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "rprompt"
@@ -183,5 +182,5 @@
     "foreground": "#7a7a7a",
     "template": " ~#@\u276f "
   },
-  "version": 2
+  "version": 3
 }

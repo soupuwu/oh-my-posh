@@ -1,13 +1,17 @@
 package segments
 
 import (
+	"path/filepath"
+	"slices"
 	"testing"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/mock"
-	"github.com/jandedobbeleer/oh-my-posh/src/platform"
+	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
 
 	"github.com/stretchr/testify/assert"
+	mock_ "github.com/stretchr/testify/mock"
 )
 
 const (
@@ -17,57 +21,60 @@ const (
 )
 
 type languageArgs struct {
+	expectedError      error
+	properties         properties.Properties
+	matchesVersionFile matchesVersionFile
 	version            string
+	versionURLTemplate string
 	extensions         []string
 	enabledExtensions  []string
 	commands           []*cmd
 	enabledCommands    []string
-	versionURLTemplate string
-	expectedError      error
-	properties         properties.Properties
-	matchesVersionFile matchesVersionFile
 	inHome             bool
 }
 
 func (l *languageArgs) hasvalue(value string, list []string) bool {
-	for _, element := range list {
-		if element == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, value)
 }
 
 func bootStrapLanguageTest(args *languageArgs) *language {
-	env := new(mock.MockedEnvironment)
+	env := new(mock.Environment)
+
 	for _, command := range args.commands {
 		env.On("HasCommand", command.executable).Return(args.hasvalue(command.executable, args.enabledCommands))
 		env.On("RunCommand", command.executable, command.args).Return(args.version, args.expectedError)
 	}
+
 	for _, extension := range args.extensions {
 		env.On("HasFiles", extension).Return(args.hasvalue(extension, args.enabledExtensions))
 	}
+
 	home := "/usr/home"
 	cwd := "/usr/home/project"
 	if args.inHome {
 		cwd = home
 	}
+
 	env.On("Pwd").Return(cwd)
 	env.On("Home").Return(home)
-	env.On("TemplateCache").Return(&platform.TemplateCache{
-		Env: make(map[string]string),
-	})
+
+	cache := &cache_.Cache{}
+	cache.On("Get", mock_.Anything).Return("", false)
+	cache.On("Set", mock_.Anything, mock_.Anything, mock_.Anything).Return(nil)
+	env.On("Cache").Return(cache)
+
 	if args.properties == nil {
 		args.properties = properties.Map{}
 	}
+
 	l := &language{
-		props:              args.properties,
-		env:                env,
 		extensions:         args.extensions,
 		commands:           args.commands,
 		versionURLTemplate: args.versionURLTemplate,
 		matchesVersionFile: args.matchesVersionFile,
 	}
+	l.Init(args.properties, env)
+
 	return l
 }
 
@@ -379,7 +386,7 @@ func TestLanguageEnabledCommandExitCode(t *testing.T) {
 		enabledExtensions: []string{uni, corn},
 		enabledCommands:   []string{"uni"},
 		version:           universion,
-		expectedError:     &platform.CommandError{ExitCode: expected},
+		expectedError:     &runtime.CommandError{ExitCode: expected},
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
@@ -410,7 +417,7 @@ func TestLanguageHyperlinkEnabled(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.version.URL)
+	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.URL)
 }
 
 func TestLanguageHyperlinkEnabledWrongRegex(t *testing.T) {
@@ -497,7 +504,7 @@ func TestLanguageInnerHyperlink(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.version.URL)
+	assert.Equal(t, "https://unicor.org/doc/1.3.307", lang.URL)
 }
 
 func TestLanguageHyperlinkTemplatePropertyTakesPriority(t *testing.T) {
@@ -520,5 +527,67 @@ func TestLanguageHyperlinkTemplatePropertyTakesPriority(t *testing.T) {
 	}
 	lang := bootStrapLanguageTest(args)
 	assert.True(t, lang.Enabled())
-	assert.Equal(t, "https://custom/url/template/1.3", lang.version.URL)
+	assert.Equal(t, "https://custom/url/template/1.3", lang.URL)
+}
+
+type mockedLanguageParams struct {
+	cmd           string
+	versionParam  string
+	versionOutput string
+	extension     string
+}
+
+func getMockedLanguageEnv(params *mockedLanguageParams) (*mock.Environment, properties.Map) {
+	env := new(mock.Environment)
+	env.On("HasCommand", params.cmd).Return(true)
+	env.On("RunCommand", params.cmd, []string{params.versionParam}).Return(params.versionOutput, nil)
+	env.On("HasFiles", params.extension).Return(true)
+	env.On("Pwd").Return("/usr/home/project")
+	env.On("Home").Return("/usr/home")
+
+	cache := &cache_.Cache{}
+	cache.On("Get", mock_.Anything).Return("", false)
+	cache.On("Set", mock_.Anything, mock_.Anything, mock_.Anything).Return(nil)
+	env.On("Cache").Return(cache)
+
+	props := properties.Map{
+		properties.FetchVersion: true,
+	}
+
+	return env, props
+}
+
+func TestNodePackageVersion(t *testing.T) {
+	cases := []struct {
+		Case        string
+		PackageJSON string
+		Version     string
+		ShouldFail  bool
+		NoFiles     bool
+	}{
+		{Case: "14.1.5", Version: "14.1.5", PackageJSON: "{ \"name\": \"nx\",\"version\": \"14.1.5\"}"},
+		{Case: "14.0.0", Version: "14.0.0", PackageJSON: "{ \"name\": \"nx\",\"version\": \"14.0.0\"}"},
+		{Case: "no files", NoFiles: true, ShouldFail: true},
+		{Case: "bad data", ShouldFail: true, PackageJSON: "bad data"},
+	}
+
+	for _, tc := range cases {
+		var env = new(mock.Environment)
+		env.On("Pwd").Return("posh")
+		path := filepath.Join("posh", "node_modules", "nx")
+		env.On("HasFilesInDir", path, "package.json").Return(!tc.NoFiles)
+		env.On("FileContent", filepath.Join(path, "package.json")).Return(tc.PackageJSON)
+
+		a := &language{}
+		a.Init(properties.Map{}, env)
+		got, err := a.nodePackageVersion("nx")
+
+		if tc.ShouldFail {
+			assert.Error(t, err, tc.Case)
+			return
+		}
+
+		assert.Nil(t, err, tc.Case)
+		assert.Equal(t, tc.Version, got, tc.Case)
+	}
 }

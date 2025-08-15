@@ -67,8 +67,8 @@
             "always_enabled": true
           },
           "style": "plain",
-          "template": " {{ if gt .Code 0 }}\u2a2f{{else}}\u2713{{ end }} ",
-          "type": "exit"
+          "template": " {{ if gt .Code 0 }}\uea76{{else}}\uf42e{{ end }} ",
+          "type": "status"
         }
       ],
       "type": "prompt"
@@ -87,5 +87,5 @@
       "type": "prompt"
     }
   ],
-  "version": 2
+  "version": 3
 }

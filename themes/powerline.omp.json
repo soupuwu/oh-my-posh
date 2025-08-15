@@ -49,12 +49,12 @@
           "powerline_symbol": "\ue0b0",
           "style": "powerline",
           "template": " \ue20f ",
-          "type": "exit"
+          "type": "status"
         }
       ],
       "type": "prompt"
     }
   ],
   "final_space": true,
-  "version": 2
+  "version": 3
 }
